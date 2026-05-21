@@ -1,0 +1,18 @@
+{
+  "name": "docflow-ai",
+  "private": true,
+  "scripts": {
+    "docker:up": "docker compose -f infra/docker-compose.yml up --build",
+    "docker:down": "docker compose -f infra/docker-compose.yml down",
+    "backend:dev": "cd apps/api && uvicorn app.main:app --reload --port 8000",
+    "backend:test": "cd apps/api && pytest",
+    "backend:lint": "cd apps/api && ruff check .",
+    "backend:worker": "cd apps/api && celery -A app.workers.celery_app.celery_app worker -l info",
+    "backend:migrate": "cd apps/api && alembic upgrade head",
+    "backend:seed": "cd apps/api && python -m app.scripts.seed",
+    "web:dev": "cd apps/web && npm run dev",
+    "web:build": "cd apps/web && npm run build",
+    "web:lint": "cd apps/web && npm run lint",
+    "web:typecheck": "cd apps/web && npm run typecheck"
+  }
+}

@@ -1,0 +1,35 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-bg text-ink antialiased;
+  background-image: radial-gradient(circle at 10% 10%, #d9e7ff 0%, transparent 45%),
+    radial-gradient(circle at 80% 0%, #e8f3ef 0%, transparent 40%);
+}
+
+.card {
+  @apply rounded-2xl border border-slate-200 bg-panel shadow-sm;
+}
+
+.input {
+  @apply w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:border-accent focus:outline-none focus:ring-2 focus:ring-blue-100;
+}
+
+.btn {
+  @apply inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition;
+}
+
+.btn-primary {
+  @apply btn bg-accent text-white hover:bg-blue-700;
+}
+
+.btn-secondary {
+  @apply btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50;
+}

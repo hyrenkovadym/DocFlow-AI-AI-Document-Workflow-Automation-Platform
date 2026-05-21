@@ -1,0 +1,80 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: docflow-postgres
+    environment:
+      POSTGRES_USER: docflow
+      POSTGRES_PASSWORD: docflow
+      POSTGRES_DB: docflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - docflow_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    container_name: docflow-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - docflow_redis_data:/data
+
+  api:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    container_name: docflow-api
+    env_file:
+      - ../.env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../apps/api:/app
+      - ../uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    container_name: docflow-worker
+    env_file:
+      - ../.env
+    volumes:
+      - ../apps/api:/app
+      - ../uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    command: celery -A app.workers.celery_app.celery_app worker -l info
+
+  web:
+    build:
+      context: ../apps/web
+      dockerfile: Dockerfile
+    container_name: docflow-web
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../apps/web:/app
+      - /app/node_modules
+    depends_on:
+      - api
+
+volumes:
+  docflow_postgres_data:
+  docflow_redis_data:
