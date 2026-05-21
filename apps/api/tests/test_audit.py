@@ -32,3 +32,4 @@ def test_user_cannot_view_audit_logs(client):
 
     logs = client.get("/api/audit-logs", headers={"Authorization": f"Bearer {token}"})
     assert logs.status_code == 403
+    assert logs.json()["detail"] == "Insufficient permissions"

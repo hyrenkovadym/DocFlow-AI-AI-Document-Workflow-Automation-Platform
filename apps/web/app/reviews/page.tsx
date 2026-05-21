@@ -61,9 +61,17 @@ export default function ReviewsPage() {
       setFieldsDraft(safeStringify(extractionResponse.structured_fields));
       setSelectedId(documentId);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        router.replace("/login");
+        return;
+      }
+      if (err instanceof ApiError && err.status === 403) {
+        setError("You do not have permission to open this document.");
+        return;
+      }
       setError(err instanceof Error ? err.message : "Failed to load selected document.");
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     const stored = getAuthToken();
@@ -81,6 +89,7 @@ export default function ReviewsPage() {
         filename: (
           <button
             className="font-semibold text-accent hover:underline"
+            disabled={actionLoading}
             onClick={() => {
               if (!token) {
                 return;
@@ -96,7 +105,7 @@ export default function ReviewsPage() {
         confidence: formatConfidence(item.confidence_score),
         created: formatDate(item.created_at),
       })),
-    [loadSelection, queue, token],
+    [actionLoading, loadSelection, queue, token],
   );
 
   const onPatchFields = async (event: FormEvent) => {
@@ -119,6 +128,14 @@ export default function ReviewsPage() {
       await api.patchReviewFields(selectedId, token, parsedFields);
       await loadSelection(token, selectedId);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        router.replace("/login");
+        return;
+      }
+      if (err instanceof ApiError && err.status === 403) {
+        setError("You do not have permission to update extracted fields.");
+        return;
+      }
       setError(err instanceof Error ? err.message : "Failed to update fields.");
     } finally {
       setActionLoading(false);
@@ -146,6 +163,18 @@ export default function ReviewsPage() {
       setReviewerComment("");
       setFieldsDraft("{}");
     } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        router.replace("/login");
+        return;
+      }
+      if (err instanceof ApiError && err.status === 403) {
+        setError("You do not have permission to submit review decisions.");
+        return;
+      }
+      if (err instanceof ApiError && err.status === 409) {
+        setError(err.message);
+        return;
+      }
       setError(err instanceof Error ? err.message : "Failed to apply review decision.");
     } finally {
       setActionLoading(false);

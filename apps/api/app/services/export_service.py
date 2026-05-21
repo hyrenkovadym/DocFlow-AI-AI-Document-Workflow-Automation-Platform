@@ -11,6 +11,8 @@ from app.models.export import ExportRecord
 from app.models.user import User
 from app.services.audit_service import log_event
 
+EXPORTABLE_STATUSES = {DocumentStatus.APPROVED, DocumentStatus.EXPORTED}
+
 
 def _build_payload(
     document: Document,
@@ -39,8 +41,11 @@ def _build_payload(
 
 
 def export_document_json(db: Session, *, document: Document, user: User) -> dict:
-    if document.status != DocumentStatus.APPROVED:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only approved documents can be exported")
+    if document.status not in EXPORTABLE_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only approved or exported documents can be exported",
+        )
 
     extraction = document.extraction
     export_timestamp = datetime.now(UTC)
@@ -74,8 +79,11 @@ def export_document_json(db: Session, *, document: Document, user: User) -> dict
 
 
 def export_document_csv(db: Session, *, document: Document, user: User) -> str:
-    if document.status != DocumentStatus.APPROVED:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only approved documents can be exported")
+    if document.status not in EXPORTABLE_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only approved or exported documents can be exported",
+        )
 
     extraction = document.extraction
     export_timestamp = datetime.now(UTC)

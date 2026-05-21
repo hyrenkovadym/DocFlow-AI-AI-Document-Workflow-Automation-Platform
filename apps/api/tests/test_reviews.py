@@ -95,6 +95,8 @@ def test_regular_user_cannot_approve_or_reject(client, create_user):
     )
     assert approve_as_user.status_code == 403
     assert reject_as_user.status_code == 403
+    assert approve_as_user.json()["detail"] == "Insufficient permissions"
+    assert reject_as_user.json()["detail"] == "Insufficient permissions"
 
     approve_as_reviewer = client.post(
         f"/api/reviews/{document_id}/approve",
@@ -102,6 +104,35 @@ def test_regular_user_cannot_approve_or_reject(client, create_user):
         headers={"Authorization": f"Bearer {reviewer_token}"},
     )
     assert approve_as_reviewer.status_code == 200
+
+
+def test_regular_user_cannot_access_review_queue(client, create_user):
+    create_user(email="queue-user@example.com", password="UserPass123!", role=UserRole.USER)
+    token = _login(client, email="queue-user@example.com", password="UserPass123!")
+
+    response = client.get("/api/reviews/queue", headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Insufficient permissions"
+
+
+def test_reviewer_and_admin_can_access_review_queue(client, create_user):
+    create_user(email="queue-owner@example.com", password="OwnerPass123!", role=UserRole.USER)
+    create_user(email="queue-reviewer@example.com", password="ReviewerPass123!", role=UserRole.REVIEWER)
+    create_user(email="queue-admin@example.com", password="AdminPass123!", role=UserRole.ADMIN)
+
+    owner_token = _login(client, email="queue-owner@example.com", password="OwnerPass123!")
+    reviewer_token = _login(client, email="queue-reviewer@example.com", password="ReviewerPass123!")
+    admin_token = _login(client, email="queue-admin@example.com", password="AdminPass123!")
+
+    _upload_needs_review_document(client, owner_token)
+
+    reviewer_response = client.get("/api/reviews/queue", headers={"Authorization": f"Bearer {reviewer_token}"})
+    admin_response = client.get("/api/reviews/queue", headers={"Authorization": f"Bearer {admin_token}"})
+
+    assert reviewer_response.status_code == 200
+    assert admin_response.status_code == 200
+    assert len(reviewer_response.json()) >= 1
+    assert len(admin_response.json()) >= 1
 
 
 def test_reviewer_can_patch_extracted_fields(client, db_session, create_user):

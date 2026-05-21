@@ -45,6 +45,10 @@ export default function DashboardPage() {
           router.replace("/login");
           return;
         }
+        if (err instanceof ApiError && err.status === 403) {
+          setError("You do not have permission to access dashboard data.");
+          return;
+        }
         setError(err instanceof Error ? err.message : "Failed to load dashboard.");
       } finally {
         setLoading(false);

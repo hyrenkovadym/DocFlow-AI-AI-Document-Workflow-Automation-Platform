@@ -46,10 +46,14 @@ export default function UploadPage() {
       const document = await api.uploadDocument(file, token);
       router.push(`/documents/${document.id}`);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 400) {
+      if (err instanceof ApiError && (err.status === 400 || err.status === 413)) {
         setError(err.message);
       } else if (err instanceof ApiError && err.status === 401) {
         router.replace("/login");
+      } else if (err instanceof ApiError && err.status === 403) {
+        setError("You do not have permission to upload documents.");
+      } else if (err instanceof ApiError && err.status === 409) {
+        setError(err.message);
       } else {
         setError(err instanceof Error ? err.message : "Failed to upload document.");
       }

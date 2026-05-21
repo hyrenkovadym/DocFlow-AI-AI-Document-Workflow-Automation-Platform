@@ -21,6 +21,7 @@ export default function DocumentsPage() {
   const [token, setToken] = useState<string | null>(null);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exportingDocumentId, setExportingDocumentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadDocuments = useCallback(async (authToken: string) => {
@@ -32,6 +33,10 @@ export default function DocumentsPage() {
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         router.replace("/login");
+        return;
+      }
+      if (err instanceof ApiError && err.status === 403) {
+        setError("You do not have permission to view documents.");
         return;
       }
       setError(err instanceof Error ? err.message : "Failed to load documents.");
@@ -67,10 +72,13 @@ export default function DocumentsPage() {
             <Link href={`/documents/${document.id}`} className="text-sm font-semibold text-accent hover:underline">
               View
             </Link>
-            {document.status === "approved" && token ? (
+            {(document.status === "approved" || document.status === "exported") && token ? (
               <button
-                className="text-sm font-semibold text-emerald-700 hover:underline"
+                className="text-sm font-semibold text-emerald-700 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={exportingDocumentId === document.id}
                 onClick={async () => {
+                  setExportingDocumentId(document.id);
+                  setError(null);
                   try {
                     const payload = await api.exportDocumentJson(document.id, token);
                     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
@@ -82,17 +90,31 @@ export default function DocumentsPage() {
                     URL.revokeObjectURL(url);
                     await loadDocuments(token);
                   } catch (err) {
+                    if (err instanceof ApiError && err.status === 401) {
+                      router.replace("/login");
+                      return;
+                    }
+                    if (err instanceof ApiError && err.status === 403) {
+                      setError("You do not have permission to export this document.");
+                      return;
+                    }
+                    if (err instanceof ApiError && err.status === 409) {
+                      setError(err.message);
+                      return;
+                    }
                     setError(err instanceof Error ? err.message : "Export failed.");
+                  } finally {
+                    setExportingDocumentId(null);
                   }
                 }}
               >
-                Export JSON
+                {exportingDocumentId === document.id ? "Exporting..." : "Export JSON"}
               </button>
             ) : null}
           </div>
         ),
       })),
-    [documents, loadDocuments, token],
+    [documents, exportingDocumentId, loadDocuments, router, token],
   );
 
   return (
@@ -100,7 +122,7 @@ export default function DocumentsPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-sm text-slate-600">All accessible documents for your role.</p>
-          <Button variant="secondary" onClick={() => (token ? loadDocuments(token) : null)}>
+          <Button variant="secondary" onClick={() => (token ? loadDocuments(token) : null)} disabled={loading}>
             Refresh
           </Button>
         </div>

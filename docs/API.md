@@ -1,4 +1,4 @@
-﻿# API Reference (Phase 2 MVP)
+﻿# API Reference (Phase 4 Hardened MVP)
 
 Base prefix: `/api`
 
@@ -10,17 +10,25 @@ Base prefix: `/api`
 ## Documents
 - `POST /documents/upload`
   - Auth required.
-  - Accepts multipart `file`.
+  - Multipart field: `file`.
   - Supported types: `txt`, `pdf`, `docx`.
-  - Validates max size by `MAX_UPLOAD_SIZE_MB`.
-  - Runs synchronous processing pipeline and returns updated document state.
+  - Server-side file validation:
+    - empty file -> `400`
+    - unsupported type -> `400`
+    - oversized file -> `413`
+  - Runs synchronous parse + mock extraction pipeline.
 - `GET /documents`
 - `GET /documents/{id}`
 - `GET /documents/{id}/text`
 - `GET /documents/{id}/extraction`
 - `POST /documents/{id}/reprocess`
+  - Allowed for owner/reviewer/admin.
+  - For `failed`, `approved`, `exported`, reprocess is allowed and returns document to `needs_review`.
 - `GET /documents/{id}/export.json`
 - `GET /documents/{id}/export.csv`
+  - Export allowed only for statuses: `approved`, `exported`.
+  - Other statuses -> `409`.
+  - Every export request creates export/audit records.
 
 ## Review
 - `GET /reviews/queue` (reviewer/admin)
@@ -35,26 +43,20 @@ Base prefix: `/api`
 - `GET /health`
 - `GET /ready`
 
-## Example: Upload document
-`POST /api/documents/upload` with multipart field `file`.
+## Permission rules summary
+- `user` sees only own documents.
+- `user` cannot access review queue.
+- `user` cannot approve/reject.
+- `user` cannot access audit logs.
+- `reviewer`/`admin` can access review queue and review actions.
+- `admin` can access audit logs.
 
-Expected flow:
-1. record created with metadata,
-2. text extracted,
-3. mock AI classification + field extraction,
-4. extraction/review task persisted,
-5. status set to `needs_review`.
-
-## Example: Export JSON response shape
-`GET /api/documents/{id}/export.json` returns payload including:
-- document metadata (`document_id`, `owner_id`, filename, status, type),
+## Export payload
+`GET /api/documents/{id}/export.json` returns:
+- metadata (`document_id`, `owner_id`, filename, status, type),
 - `structured_fields`,
-- `review_status`,
-- `exported_at`, `exported_by_id`.
-
-Export rules:
-- only `approved` documents are exportable,
-- non-approved exports return `409 Conflict`.
+- review metadata (`review_status`, `reviewer_comment`),
+- export metadata (`exported_at`, `exported_by_id`).
 
 ## Interactive docs
 - Swagger UI: `/docs`

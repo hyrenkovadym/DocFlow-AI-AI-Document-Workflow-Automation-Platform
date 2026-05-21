@@ -57,8 +57,21 @@ async function request<T>(path: string, options: ApiRequestOptions = {}): Promis
   });
 
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({ detail: "Request failed" }));
-    const detail = payload?.detail ?? "Request failed";
+    let detail = "Request failed";
+    const contentType = response.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const payload = await response.json().catch(() => null);
+      if (typeof payload?.detail === "string") {
+        detail = payload.detail;
+      } else if (Array.isArray(payload?.detail)) {
+        detail = payload.detail.map((item: { msg?: string }) => item?.msg).filter(Boolean).join("; ") || detail;
+      }
+    } else {
+      const textPayload = await response.text().catch(() => "");
+      if (textPayload.trim()) {
+        detail = textPayload.trim();
+      }
+    }
     throw new ApiError(detail, response.status);
   }
 

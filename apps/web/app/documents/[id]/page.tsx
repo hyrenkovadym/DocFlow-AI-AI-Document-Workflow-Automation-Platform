@@ -76,6 +76,18 @@ export default function DocumentDetailPage() {
       await api.reprocessDocument(documentId, token);
       await loadDocument(token);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        router.replace("/login");
+        return;
+      }
+      if (err instanceof ApiError && err.status === 403) {
+        setError("You do not have permission to reprocess this document.");
+        return;
+      }
+      if (err instanceof ApiError && err.status === 409) {
+        setError(err.message);
+        return;
+      }
       setError(err instanceof Error ? err.message : "Failed to reprocess document.");
     } finally {
       setBusyAction(null);
@@ -99,6 +111,18 @@ export default function DocumentDetailPage() {
       URL.revokeObjectURL(url);
       await loadDocument(token);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        router.replace("/login");
+        return;
+      }
+      if (err instanceof ApiError && err.status === 403) {
+        setError("You do not have permission to export this document.");
+        return;
+      }
+      if (err instanceof ApiError && err.status === 409) {
+        setError(err.message);
+        return;
+      }
       setError(err instanceof Error ? err.message : "Failed to export document.");
     } finally {
       setBusyAction(null);
@@ -145,7 +169,7 @@ export default function DocumentDetailPage() {
               <Button variant="secondary" onClick={onReprocess} disabled={busyAction !== null}>
                 {busyAction === "reprocess" ? "Reprocessing..." : "Reprocess"}
               </Button>
-              {documentData.status === "approved" ? (
+              {documentData.status === "approved" || documentData.status === "exported" ? (
                 <Button onClick={onExport} disabled={busyAction !== null}>
                   {busyAction === "export" ? "Exporting..." : "Export JSON"}
                 </Button>
