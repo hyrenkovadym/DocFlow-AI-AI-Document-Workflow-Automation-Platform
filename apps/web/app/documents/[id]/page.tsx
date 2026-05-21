@@ -1,80 +1,174 @@
-"use client";
+﻿"use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 
-import { AppShell } from "@/components/app-shell";
-import { StatusBadge } from "@/components/status-badge";
-import { api } from "@/lib/api";
+import { Layout } from "@/components/Layout";
+import { Card } from "@/components/Card";
+import { Button } from "@/components/Button";
+import { ErrorState } from "@/components/ErrorState";
+import { LoadingState } from "@/components/LoadingState";
+import { StatusBadge } from "@/components/StatusBadge";
+import { api, ApiError } from "@/lib/api";
+import { getAuthToken } from "@/lib/auth";
+import { DocumentDetail, DocumentExtractionResponse } from "@/lib/types";
+import { formatConfidence, formatDate, safeStringify } from "@/lib/utils";
 
-export default function DocumentDetailPage({ params }: { params: { id: string } }) {
+export default function DocumentDetailPage() {
+  const params = useParams<{ id: string }>();
   const router = useRouter();
+  const documentId = params.id;
+
   const [token, setToken] = useState<string | null>(null);
-  const [documentData, setDocumentData] = useState<any>(null);
-  const [extraction, setExtraction] = useState<any>(null);
+  const [documentData, setDocumentData] = useState<DocumentDetail | null>(null);
+  const [extractedText, setExtractedText] = useState<string>("");
+  const [extraction, setExtraction] = useState<DocumentExtractionResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busyAction, setBusyAction] = useState<"reprocess" | "export" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const loadDocument = useCallback(async (authToken: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [doc, textResponse] = await Promise.all([
+        api.getDocument(documentId, authToken),
+        api.getDocumentText(documentId, authToken).catch(() => ({ document_id: documentId, text: "" })),
+      ]);
+
+      setDocumentData(doc);
+      setExtractedText(textResponse.text || doc.extracted_text || "");
+
+      try {
+        const extractionResponse = await api.getExtraction(documentId, authToken);
+        setExtraction(extractionResponse);
+      } catch {
+        setExtraction(null);
+      }
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        router.replace("/login");
+        return;
+      }
+      setError(err instanceof Error ? err.message : "Failed to load document details.");
+    } finally {
+      setLoading(false);
+    }
+  }, [documentId, router]);
+
   useEffect(() => {
-    const storedToken = localStorage.getItem("docflow_token");
-    if (!storedToken) {
-      router.push("/login");
+    const stored = getAuthToken();
+    if (!stored) {
+      router.replace("/login");
       return;
     }
-    setToken(storedToken);
-  }, [router]);
+    setToken(stored);
+    loadDocument(stored);
+  }, [loadDocument, router]);
 
-  useEffect(() => {
-    if (!token) return;
-    (async () => {
-      try {
-        const doc = await api.getDocument(params.id, token);
-        setDocumentData(doc);
-        try {
-          const ext = await api.getExtraction(params.id, token);
-          setExtraction(ext);
-        } catch {
-          setExtraction(null);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load document");
-      }
-    })();
-  }, [params.id, token]);
+  const onReprocess = async () => {
+    if (!token) {
+      return;
+    }
+    setBusyAction("reprocess");
+    setError(null);
+    try {
+      await api.reprocessDocument(documentId, token);
+      await loadDocument(token);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to reprocess document.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const onExport = async () => {
+    if (!token) {
+      return;
+    }
+    setBusyAction("export");
+    setError(null);
+    try {
+      const payload = await api.exportDocumentJson(documentId, token);
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = window.document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${documentData?.original_filename ?? documentId}.export.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      await loadDocument(token);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to export document.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
 
   return (
-    <AppShell>
-      {error ? <p className="text-red-600">{error}</p> : null}
-      {!documentData ? (
-        <p className="text-slate-500">Loading...</p>
-      ) : (
-        <div className="space-y-6">
-          <section className="card p-5">
-            <h1 className="text-2xl font-extrabold">{documentData.original_filename}</h1>
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <StatusBadge status={documentData.status} />
-              <span className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
-                {documentData.document_type}
-              </span>
-              <span className="text-sm text-slate-600">Confidence: {documentData.ai_confidence_score ?? "n/a"}</span>
-            </div>
-          </section>
+    <Layout title="Document Detail" description="Inspect extracted text, structured fields, and workflow actions.">
+      {loading ? <LoadingState message="Loading document..." /> : null}
+      {error ? <ErrorState message={error} /> : null}
 
-          <section className="grid gap-6 lg:grid-cols-2">
-            <article className="card p-5">
-              <h2 className="text-lg font-bold">Extracted Text</h2>
-              <pre className="mt-3 max-h-[420px] overflow-auto whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-xs text-slate-700">
-                {documentData.extracted_text || "No extracted text yet."}
+      {!loading && documentData ? (
+        <div className="space-y-4">
+          <Card>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-bold text-ink">{documentData.original_filename}</h2>
+                <p className="mt-1 text-sm text-slate-600">Created: {formatDate(documentData.created_at)}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge status={documentData.status} />
+                <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700">
+                  {documentData.document_type}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
+              <p>
+                <span className="font-semibold text-slate-700">File type:</span> {documentData.file_type}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-700">Confidence:</span> {formatConfidence(documentData.ai_confidence_score)}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-700">Owner ID:</span> {documentData.owner_id}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-700">Updated:</span> {formatDate(documentData.updated_at)}
+              </p>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button variant="secondary" onClick={onReprocess} disabled={busyAction !== null}>
+                {busyAction === "reprocess" ? "Reprocessing..." : "Reprocess"}
+              </Button>
+              {documentData.status === "approved" ? (
+                <Button onClick={onExport} disabled={busyAction !== null}>
+                  {busyAction === "export" ? "Exporting..." : "Export JSON"}
+                </Button>
+              ) : null}
+            </div>
+          </Card>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card>
+              <h3 className="text-base font-semibold text-ink">Extracted Text</h3>
+              <pre className="mt-3 max-h-[460px] overflow-auto whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-xs text-slate-700">
+                {extractedText || "No extracted text available."}
               </pre>
-            </article>
-            <article className="card p-5">
-              <h2 className="text-lg font-bold">Structured Fields</h2>
-              <pre className="mt-3 max-h-[420px] overflow-auto whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-xs text-slate-700">
-                {JSON.stringify(extraction?.structured_fields ?? {}, null, 2)}
+            </Card>
+            <Card>
+              <h3 className="text-base font-semibold text-ink">Structured Fields</h3>
+              <pre className="mt-3 max-h-[460px] overflow-auto whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-xs text-slate-700">
+                {safeStringify(extraction?.structured_fields ?? {})}
               </pre>
-            </article>
-          </section>
+            </Card>
+          </div>
         </div>
-      )}
-    </AppShell>
+      ) : null}
+    </Layout>
   );
 }

@@ -2,70 +2,36 @@
 
 **AI-powered document intake and workflow automation platform**
 
-DocFlow AI is a production-style full-stack portfolio project for document operations. Users upload business files, the backend extracts text and structured fields with a mock AI provider, reviewers approve or reject results, and approved data can be exported.
+DocFlow AI is a production-style full-stack portfolio project for internal business document operations.
 
-## Problem statement
-Teams often process invoices, contracts, requests, and reports manually. This causes inconsistent outputs, slow handoffs, and weak traceability.
-
-DocFlow AI addresses this with:
-- secure upload + parsing,
-- structured AI extraction with validation,
-- human-in-the-loop approval,
-- full audit trail,
-- export-ready data.
-
-## Current MVP status (Phase 2)
-This repository currently implements the first complete backend MVP flow:
-- upload document,
-- synchronous extraction + mock AI processing,
-- review queue + approve/reject + field edits,
-- export approved document,
-- audit logs for key actions.
-
-Processing is intentionally synchronous in this phase (no Celery runtime required).
+## What is implemented now
+- Backend MVP workflow (Phase 2): upload -> parse -> mock AI extraction -> review -> export -> audit.
+- Frontend MVP (Phase 3): login/register, dashboard, documents, upload, detail, review queue, audit logs.
+- Processing is synchronous in the current phase.
+- No real OpenAI key is required.
 
 ## Tech stack
-- Backend: Python, FastAPI, SQLAlchemy 2.x, Alembic, PostgreSQL, Redis (reserved for next phase), Pydantic
-- Frontend: Next.js, React, TypeScript, Tailwind CSS
+- Backend: FastAPI, SQLAlchemy 2.x, Alembic, PostgreSQL, Pydantic
+- Frontend: Next.js (App Router), React, TypeScript, Tailwind CSS
 - Tooling: pytest, ruff, Docker Compose, GitHub Actions
 
 ## Core features
 - JWT auth + RBAC (`admin`, `reviewer`, `user`)
-- Upload intake (`txt`, `pdf`, `docx`) with size/type validation
-- Mock AI provider abstraction (`AIProvider` / `MockAIProvider`)
-- Document workflow states (`uploaded`, `processing`, `needs_review`, `approved`, `rejected`, `exported`, `failed`)
-- Review queue with reviewer/admin permissions
-- JSON/CSV export with export records
-- Audit logs for all key workflow events
+- File upload (`txt`, `pdf`, `docx`) with validation
+- Mock AI provider for classification and structured extraction
+- Human-in-the-loop review queue with approve/reject and field patching
+- Audit logs for key document lifecycle events
+- JSON/CSV export from approved records
 
-## Architecture overview
-- `apps/api`: FastAPI API, services, models, migrations
-- `apps/web`: Next.js dashboard (basic MVP UI)
-- `infra/docker-compose.yml`: local Postgres/Redis/API/worker/web services
-- `docs/`: architecture, workflows, API, AI, DB, security, roadmap
-
-## Project structure
-```text
-docflow-ai/
-|- apps/
-|  |- api/
-|  |  |- app/
-|  |  |  |- api/routes
-|  |  |  |- core
-|  |  |  |- db
-|  |  |  |- models
-|  |  |  |- schemas
-|  |  |  |- services
-|  |  |  |- workers
-|  |  |- alembic/
-|  |  |- tests/
-|  |- web/
-|- infra/
-|- docs/
-|- .github/workflows/
-|- README.md
-|- .env.example
-```
+## Frontend pages
+- `/login`
+- `/register`
+- `/dashboard`
+- `/documents`
+- `/upload`
+- `/documents/{id}`
+- `/reviews`
+- `/audit-logs`
 
 ## Local setup
 ### 1. Clone and configure
@@ -80,7 +46,7 @@ cp .env.example .env
 docker compose -f infra/docker-compose.yml up -d postgres redis
 ```
 
-### 3. Backend setup
+### 3. Run backend
 ```bash
 cd apps/api
 pip install -e .[dev]
@@ -89,103 +55,62 @@ python -m app.scripts.seed
 uvicorn app.main:app --reload --port 8000
 ```
 
-### 4. Frontend setup (optional for backend-only validation)
+### 4. Run frontend
 ```bash
 cd apps/web
+cp .env.example .env.local
 npm install
 npm run dev
 ```
 
-## Docker setup
-Run full stack:
-```bash
-docker compose -f infra/docker-compose.yml up --build
-```
+## URLs
+- Frontend: `http://localhost:3000`
+- Backend Swagger: `http://localhost:8000/docs`
+- Backend health: `http://localhost:8000/api/health`
 
-Stop stack:
-```bash
-docker compose -f infra/docker-compose.yml down
-```
+## Frontend environment variables
+`apps/web/.env.example`:
+- `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api`
 
-## Environment variables
-Use `.env.example` as the source of truth.
-
-Important keys:
-- `DATABASE_URL`
-- `REDIS_URL`
-- `SECRET_KEY`
-- `UPLOAD_DIR`
-- `MAX_UPLOAD_SIZE_MB`
-- `ALLOWED_FILE_TYPES`
-- `AI_PROVIDER=mock|openai`
-- `OPENAI_API_KEY` (optional, not required for MVP)
-- `NEXT_PUBLIC_API_BASE_URL`
-
-## API docs and health
-- Swagger UI: `http://localhost:8000/docs`
-- OpenAPI JSON: `http://localhost:8000/openapi.json`
-- Health: `http://localhost:8000/api/health`
-- Ready: `http://localhost:8000/api/ready`
-
-See also: `docs/API.md`.
-
-## Tests
+## Tests and checks
 Backend tests:
 ```bash
 cd apps/api
 pytest -q
 ```
 
-Lint:
+Backend lint:
 ```bash
 cd apps/api
 ruff check .
 ```
 
-Test database note:
-- Tests intentionally run on isolated SQLite for speed and deterministic CI.
-- Runtime application uses PostgreSQL.
+Frontend build check:
+```bash
+cd apps/web
+npm run build
+```
 
-## Mock AI mode
-Default mode is `AI_PROVIDER=mock`.
-- No real AI key is required for local development/tests.
-- No external AI calls are made in tests.
-
-## Demo credentials (seed)
-- Admin: `admin@docflow.local` / `AdminPass123!`
-- Reviewer: `reviewer@docflow.local` / `ReviewerPass123!`
-- User: `user@docflow.local` / `UserPass123!`
-
-## Manual MVP flow
-1. Login as `user`.
-2. Upload a TXT/PDF/DOCX file via `POST /api/documents/upload`.
-3. Confirm status becomes `needs_review`.
-4. Login as `reviewer`, approve/reject from review endpoints.
-5. Export approved document via `GET /api/documents/{id}/export.json`.
-6. Login as `admin`, inspect `GET /api/audit-logs`.
+## Manual demo flow
+1. Open `http://localhost:3000/register` and create a user.
+2. Login and open `/upload`.
+3. Upload TXT/PDF/DOCX.
+4. Open `/documents` and verify status becomes `needs_review`.
+5. Login as reviewer and open `/reviews` to approve/reject.
+6. Open `/documents/{id}` and export JSON for approved record.
+7. Login as admin and open `/audit-logs`.
 
 ## Security notes
-- No real secrets are committed.
-- JWT auth + RBAC on protected routes.
-- File type and size validation at upload.
-- AI output validated with Pydantic before persistence.
-- Audit events retained for traceability.
+- No real secrets committed.
+- Mock AI is default.
+- JWT-based protected API access.
+- Upload file type and size validation enforced by backend config.
 
-See: `docs/SECURITY.md` and root `SECURITY.md`.
-
-## Limitations (current MVP)
-- Synchronous processing (no asynchronous worker path yet).
-- OCR/image ingestion not implemented yet.
-- Export is per-document (no bulk export endpoint yet).
-- Multi-tenant/company isolation not implemented yet.
-
-## Roadmap
-See `docs/ROADMAP.md` for planned next phases:
-- async background workers,
-- OCR support,
-- webhooks/integrations,
-- advanced observability,
-- deployment hardening.
+## Current limitations
+- Synchronous processing only (no async worker path in active flow yet).
+- OCR for images is not implemented.
+- No bulk export endpoint yet.
+- No multi-tenant organization boundaries yet.
 
 ## Employer-facing summary
 I built **DocFlow AI**, a full-stack AI-powered document workflow automation platform with FastAPI, PostgreSQL, Next.js, role-based access control, audit logs, human-in-the-loop review, structured extraction, Docker, tests, and CI-ready engineering practices.
