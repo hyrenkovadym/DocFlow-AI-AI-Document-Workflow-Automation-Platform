@@ -11,8 +11,8 @@ from app.models.document import Document, DocumentExtraction
 from app.models.enums import DocumentStatus, UserRole
 from app.models.user import User
 from app.services.audit_service import log_event
+from app.services.workflow_service import process_document_pipeline_sync
 from app.utils.file_storage import ensure_directory, write_bytes
-from app.workers.tasks import process_document_task
 
 
 def _validate_upload(filename: str, content: bytes) -> str:
@@ -32,7 +32,7 @@ def _validate_upload(filename: str, content: bytes) -> str:
     return extension
 
 
-def create_document_and_enqueue(db: Session, *, owner: User, filename: str, content: bytes) -> Document:
+def create_document_and_process(db: Session, *, owner: User, filename: str, content: bytes) -> Document:
     extension = _validate_upload(filename, content)
     settings = get_settings()
 
@@ -47,6 +47,7 @@ def create_document_and_enqueue(db: Session, *, owner: User, filename: str, cont
         stored_filename=stored_filename,
         file_type=extension,
         status=DocumentStatus.UPLOADED,
+        metadata_json={"stored_path": str(file_path)},
     )
     db.add(document)
     db.commit()
@@ -58,23 +59,25 @@ def create_document_and_enqueue(db: Session, *, owner: User, filename: str, cont
         entity_type="document",
         entity_id=str(document.id),
         actor_id=str(owner.id),
-        metadata={"filename": filename, "file_type": extension},
+        metadata={
+            "filename": filename,
+            "file_type": extension,
+            "stored_filename": stored_filename,
+            "stored_path": str(file_path),
+        },
     )
 
-    document.status = DocumentStatus.QUEUED
-    db.commit()
-    db.refresh(document)
+    process_document_pipeline_sync(db, document_id=str(document.id), actor_id=str(owner.id))
+    db.expire_all()
+    processed_document = db.get(Document, document.id)
+    if not processed_document:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Document was not found")
+    return processed_document
 
-    log_event(
-        db,
-        action="processing_queued",
-        entity_type="document",
-        entity_id=str(document.id),
-        actor_id=str(owner.id),
-    )
 
-    process_document_task.delay(str(document.id))
-    return document
+def create_document_and_enqueue(db: Session, *, owner: User, filename: str, content: bytes) -> Document:
+    # Backwards-compatible alias kept intentionally while processing is synchronous.
+    return create_document_and_process(db, owner=owner, filename=filename, content=content)
 
 
 def list_documents_for_user(db: Session, user: User) -> list[Document]:
@@ -110,7 +113,7 @@ def get_document_extraction(db: Session, *, document_id: str, user: User) -> Doc
 
 def reprocess_document(db: Session, *, document_id: str, user: User) -> Document:
     document = get_document_for_user(db, document_id=document_id, user=user)
-    document.status = DocumentStatus.QUEUED
+    document.status = DocumentStatus.UPLOADED
     document.processing_error = None
     db.commit()
     db.refresh(document)
@@ -123,5 +126,9 @@ def reprocess_document(db: Session, *, document_id: str, user: User) -> Document
         actor_id=str(user.id),
     )
 
-    process_document_task.delay(str(document.id))
-    return document
+    process_document_pipeline_sync(db, document_id=str(document.id), actor_id=str(user.id))
+    db.expire_all()
+    processed_document = db.get(Document, document.id)
+    if not processed_document:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Document was not found")
+    return processed_document

@@ -14,7 +14,7 @@ from app.schemas.document import (
     DocumentResponse,
 )
 from app.services.document_service import (
-    create_document_and_enqueue,
+    create_document_and_process,
     get_document_extraction,
     get_document_for_user,
     list_documents_for_user,
@@ -32,7 +32,7 @@ async def upload_document(
     current_user: User = Depends(get_current_user),
 ) -> DocumentResponse:
     content = await file.read()
-    return create_document_and_enqueue(
+    return create_document_and_process(
         db, owner=current_user, filename=file.filename or "uploaded.txt", content=content
     )
 

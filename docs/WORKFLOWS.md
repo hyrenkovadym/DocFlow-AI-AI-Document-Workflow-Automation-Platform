@@ -1,21 +1,37 @@
-# Workflows
+﻿# Workflows (Phase 2 MVP)
 
-## Upload and process
-1. User uploads PDF/DOCX/TXT.
-2. API creates document with `uploaded` then `queued`.
-3. Celery worker sets `processing`, parses text, calls AI provider.
-4. Worker stores extraction and marks document `needs_review`.
+## 1. Upload and process document
+1. Authenticated user uploads `txt`/`pdf`/`docx`.
+2. API validates file type and file size.
+3. File is stored in local upload directory.
+4. Pipeline runs synchronously:
+   - `document_processing_started`
+   - text extraction
+   - `document_text_extracted`
+   - mock AI classification/field extraction
+   - `ai_extraction_completed`
+   - review task creation
+   - `review_task_created`
+5. Document status becomes `needs_review`.
 
-## Review and approve/reject
-1. Reviewer opens review queue.
-2. Reviewer inspects extracted fields and edits if needed.
-3. Reviewer approves (`approved`) or rejects (`rejected`).
+## 2. Review queue and decision
+1. Reviewer/admin opens `/api/reviews/queue`.
+2. Reviewer inspects extraction and optionally updates fields.
+3. Reviewer approves or rejects:
+   - approve => document status `approved`, audit `document_approved`
+   - reject => document status `rejected`, audit `document_rejected`
 
-## Export
-1. Approved document is exported to JSON or CSV.
-2. Export action writes `ExportRecord` and audit event.
-3. Status becomes `exported` after export request.
+## 3. Export
+1. Only approved documents are exportable.
+2. Owner/reviewer/admin can export JSON (and CSV if needed).
+3. Export creates `ExportRecord`, audit `document_exported`, and marks status `exported`.
 
-## Admin audit review
-1. Admin opens audit logs page/API.
-2. Admin traces user actions and processing events for compliance.
+## 4. Audit review
+1. Admin opens `/api/audit-logs`.
+2. Admin can trace user actions and workflow lifecycle events for compliance/debugging.
+
+## Failure path
+If parsing/processing fails:
+1. document status becomes `failed`,
+2. processing error is stored,
+3. audit event `document_processing_failed` is written.

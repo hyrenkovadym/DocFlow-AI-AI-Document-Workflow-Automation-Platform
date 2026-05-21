@@ -1,5 +1,6 @@
 import csv
 import io
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -11,7 +12,15 @@ from app.models.user import User
 from app.services.audit_service import log_event
 
 
-def _build_payload(document: Document, extraction: DocumentExtraction | None) -> dict:
+def _build_payload(
+    document: Document,
+    extraction: DocumentExtraction | None,
+    *,
+    export_timestamp: datetime,
+    exported_by_id: str,
+) -> dict:
+    review_status = document.review_task.status.value if document.review_task else "pending"
+    reviewer_comment = document.review_task.reviewer_comment if document.review_task else None
     return {
         "document_id": str(document.id),
         "owner_id": str(document.owner_id),
@@ -19,6 +28,10 @@ def _build_payload(document: Document, extraction: DocumentExtraction | None) ->
         "status": document.status.value,
         "document_type": document.document_type.value,
         "confidence_score": document.ai_confidence_score,
+        "review_status": review_status,
+        "reviewer_comment": reviewer_comment,
+        "exported_at": export_timestamp.isoformat(),
+        "exported_by_id": exported_by_id,
         "structured_fields": extraction.structured_fields if extraction else {},
         "created_at": document.created_at.isoformat(),
         "updated_at": document.updated_at.isoformat(),
@@ -27,10 +40,16 @@ def _build_payload(document: Document, extraction: DocumentExtraction | None) ->
 
 def export_document_json(db: Session, *, document: Document, user: User) -> dict:
     if document.status != DocumentStatus.APPROVED:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Document must be approved")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only approved documents can be exported")
 
     extraction = document.extraction
-    payload = _build_payload(document, extraction)
+    export_timestamp = datetime.now(UTC)
+    payload = _build_payload(
+        document,
+        extraction,
+        export_timestamp=export_timestamp,
+        exported_by_id=str(user.id),
+    )
 
     export_record = ExportRecord(
         document_id=document.id,
@@ -56,10 +75,16 @@ def export_document_json(db: Session, *, document: Document, user: User) -> dict
 
 def export_document_csv(db: Session, *, document: Document, user: User) -> str:
     if document.status != DocumentStatus.APPROVED:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Document must be approved")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only approved documents can be exported")
 
     extraction = document.extraction
-    payload = _build_payload(document, extraction)
+    export_timestamp = datetime.now(UTC)
+    payload = _build_payload(
+        document,
+        extraction,
+        export_timestamp=export_timestamp,
+        exported_by_id=str(user.id),
+    )
 
     flat_data = {
         "document_id": payload["document_id"],

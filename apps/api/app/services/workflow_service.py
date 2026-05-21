@@ -5,6 +5,7 @@ from pathlib import Path
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db.session import SessionLocal
@@ -16,8 +17,19 @@ from app.services.audit_service import log_event
 from app.services.parser_service import UnsupportedDocumentTypeError, extract_text_from_file
 
 
-def process_document_pipeline(document_id: str) -> None:
+def process_document_pipeline(document_id: str, actor_id: str | None = None) -> None:
     db = SessionLocal()
+    try:
+        _process_document_pipeline_in_session(db, document_id=document_id, actor_id=actor_id)
+    finally:
+        db.close()
+
+
+def process_document_pipeline_sync(db: Session, *, document_id: str, actor_id: str | None = None) -> None:
+    _process_document_pipeline_in_session(db, document_id=document_id, actor_id=actor_id)
+
+
+def _process_document_pipeline_in_session(db: Session, *, document_id: str, actor_id: str | None = None) -> None:
     settings = get_settings()
     try:
         document_uuid = UUID(document_id)
@@ -30,9 +42,10 @@ def process_document_pipeline(document_id: str) -> None:
 
         log_event(
             db,
-            action="processing_started",
+            action="document_processing_started",
             entity_type="document",
             entity_id=document_id,
+            actor_id=actor_id or str(document.owner_id),
             metadata={"stored_filename": document.stored_filename},
         )
 
@@ -40,12 +53,22 @@ def process_document_pipeline(document_id: str) -> None:
         extracted_text = extract_text_from_file(file_path, document.file_type)
         if not extracted_text.strip():
             raise ValueError("Extracted text is empty")
+        document.extracted_text = extracted_text
+        db.commit()
+
+        log_event(
+            db,
+            action="document_text_extracted",
+            entity_type="document",
+            entity_id=document_id,
+            actor_id=actor_id or str(document.owner_id),
+            metadata={"characters": len(extracted_text)},
+        )
 
         ai_provider = get_ai_provider()
         classification = ai_provider.classify_document(extracted_text)
         fields = ai_provider.extract_fields(extracted_text, classification.document_type.value)
 
-        document.extracted_text = extracted_text
         try:
             document.document_type = DocumentType(fields.document_type.value)
         except Exception:
@@ -92,6 +115,7 @@ def process_document_pipeline(document_id: str) -> None:
             action="ai_extraction_completed",
             entity_type="document",
             entity_id=document_id,
+            actor_id=actor_id or str(document.owner_id),
             metadata={
                 "document_type": document.document_type.value,
                 "confidence_score": fields.confidence_score,
@@ -99,20 +123,19 @@ def process_document_pipeline(document_id: str) -> None:
         )
         log_event(
             db,
-            action="review_requested",
+            action="review_task_created",
             entity_type="document",
             entity_id=document_id,
+            actor_id=actor_id or str(document.owner_id),
             metadata={"review_status": review_task.status.value},
         )
     except (UnsupportedDocumentTypeError, ValueError) as exc:
-        _fail_document(db, document_id, str(exc))
+        _fail_document(db, document_id, str(exc), actor_id=actor_id)
     except Exception as exc:
-        _fail_document(db, document_id, f"Unexpected processing error: {exc}")
-    finally:
-        db.close()
+        _fail_document(db, document_id, f"Unexpected processing error: {exc}", actor_id=actor_id)
 
 
-def _fail_document(db, document_id: str, error_message: str) -> None:
+def _fail_document(db: Session, document_id: str, error_message: str, actor_id: str | None = None) -> None:
     document = db.get(Document, UUID(document_id))
     if not document:
         return
@@ -122,9 +145,10 @@ def _fail_document(db, document_id: str, error_message: str) -> None:
 
     log_event(
         db,
-        action="processing_failed",
+        action="document_processing_failed",
         entity_type="document",
         entity_id=document_id,
+        actor_id=actor_id or str(document.owner_id),
         metadata={"error": error_message},
     )
 

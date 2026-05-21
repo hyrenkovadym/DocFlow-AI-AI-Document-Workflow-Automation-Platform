@@ -37,14 +37,6 @@ def client(db_session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     get_settings.cache_clear()
 
     from app.main import app
-    from app.services import document_service
-
-    class _DummyTask:
-        @staticmethod
-        def delay(_document_id: str) -> None:
-            return None
-
-    monkeypatch.setattr(document_service, "process_document_task", _DummyTask)
 
     def override_get_db():
         try:

@@ -1,38 +1,60 @@
-# AI Pipeline
+﻿# AI Pipeline (Phase 2 MVP)
 
-## Step 1: Text extraction
-- TXT: raw text read.
-- PDF: page text extraction with `pypdf`.
-- DOCX: paragraph extraction with `python-docx`.
+## Overview
+Current MVP uses a synchronous, backend-only pipeline with a mock AI provider by default.
+
+## Step 1: File text extraction
+Supported parsers:
+- TXT: direct UTF-8/ignore read
+- PDF: `pypdf`
+- DOCX: `python-docx`
+
+If file type is unsupported or extraction result is empty, processing fails and is audited.
 
 ## Step 2: Classification
-`AIProvider.classify_document(text)` predicts one of:
-- invoice
-- contract
-- request
-- report
-- unknown
+`AIProvider.classify_document(text)` returns one of:
+- `invoice`
+- `contract`
+- `request`
+- `report`
+- `unknown`
 
 ## Step 3: Structured extraction
-`AIProvider.extract_fields(text, document_type)` returns:
-- title
-- summary
-- dates
-- people_or_companies
-- amount
-- priority
-- recommended_action
-- confidence_score
+`AIProvider.extract_fields(text, document_type)` returns validated fields:
+- `document_type`
+- `title`
+- `summary`
+- `dates`
+- `people_or_companies`
+- `amount`
+- `priority`
+- `recommended_action`
+- `confidence_score`
 
-## Step 4: Validation
-- All AI outputs are validated by Pydantic schemas.
-- Invalid payloads fail processing and create `processing_failed` audit event.
+## Step 4: Validation and persistence
+- All AI output is validated by Pydantic schemas.
+- Structured data is stored in `DocumentExtraction`.
+- Confidence and classification metadata are stored on `Document`.
 
-## Step 5: Human-in-the-loop
-- Worker always creates a review task.
-- Reviewer can patch extracted fields before approval.
-- Low confidence is persisted in document metadata for reviewer context.
+## Step 5: Human-in-the-loop handoff
+- Document status transitions to `needs_review`.
+- `ReviewTask` is created/updated as `pending`.
+- Reviewer/admin makes final approve/reject decision.
 
 ## Providers
-- `MockAIProvider`: deterministic local behavior for tests/demo.
-- `OpenAICompatibleProvider`: runtime calls to OpenAI-compatible `/chat/completions` API.
+### MockAIProvider (default)
+- deterministic keyword-based behavior,
+- safe for local development and CI,
+- no network dependency.
+
+### OpenAICompatibleProvider (available but not required in this phase)
+- enabled with `AI_PROVIDER=openai`,
+- uses OpenAI-compatible chat completions endpoint,
+- never used in tests.
+
+## Key audit events
+- `document_processing_started`
+- `document_text_extracted`
+- `ai_extraction_completed`
+- `review_task_created`
+- `document_processing_failed`
