@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Short-term
+- Phase 5 async worker activation (see `docs/PHASE5_ASYNC_MIGRATION_PLAN.md`)
 - OCR/image ingestion (PNG/JPEG/TIFF)
 - Bulk export endpoint
 - Reviewer assignment strategies
