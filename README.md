@@ -77,7 +77,12 @@ cd docflow-ai
 cp .env.example .env
 ```
 
-### 2. Backend setup
+### 2. Start PostgreSQL and Redis
+```bash
+docker compose -f infra/docker-compose.yml up -d postgres redis
+```
+
+### 3. Backend setup
 ```bash
 cd apps/api
 pip install -e .[dev]
@@ -86,13 +91,13 @@ python -m app.scripts.seed
 uvicorn app.main:app --reload --port 8000
 ```
 
-### 3. Worker setup
+### 4. Worker setup
 ```bash
 cd apps/api
 celery -A app.workers.celery_app.celery_app worker -l info
 ```
 
-### 4. Frontend setup
+### 5. Frontend setup
 ```bash
 cd apps/web
 npm install
@@ -124,6 +129,7 @@ Key values:
 ## API docs
 - Swagger UI: `http://localhost:8000/docs`
 - OpenAPI JSON: `http://localhost:8000/openapi.json`
+- Health: `http://localhost:8000/api/health`
 
 Reference: [`docs/API.md`](docs/API.md)
 
@@ -133,6 +139,8 @@ Backend tests:
 cd apps/api
 pytest
 ```
+
+Note: tests intentionally use isolated SQLite (`apps/api/tests/conftest.py`) for fast and deterministic runs in local/CI.
 
 Lint:
 ```bash

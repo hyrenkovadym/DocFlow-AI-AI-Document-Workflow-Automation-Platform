@@ -4,6 +4,9 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+API_DIR = Path(__file__).resolve().parents[2]
+ROOT_DIR = API_DIR.parents[1] if len(API_DIR.parents) > 1 else API_DIR
+
 
 class Settings(BaseSettings):
     project_name: str = "DocFlow AI"
@@ -29,7 +32,12 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", case_sensitive=False)
+    model_config = SettingsConfigDict(
+        env_file=(str(ROOT_DIR / ".env"), str(API_DIR / ".env"), ".env"),
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
 
     @property
     def allowed_file_extensions(self) -> set[str]:

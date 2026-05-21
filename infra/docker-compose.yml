@@ -31,6 +31,10 @@ services:
     container_name: docflow-api
     env_file:
       - ../.env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://docflow:docflow@postgres:5432/docflow
+      REDIS_URL: redis://redis:6379/0
+      UPLOAD_DIR: /app/uploads
     ports:
       - "8000:8000"
     volumes:
@@ -50,6 +54,10 @@ services:
     container_name: docflow-worker
     env_file:
       - ../.env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://docflow:docflow@postgres:5432/docflow
+      REDIS_URL: redis://redis:6379/0
+      UPLOAD_DIR: /app/uploads
     volumes:
       - ../apps/api:/app
       - ../uploads:/app/uploads
