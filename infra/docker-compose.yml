@@ -34,6 +34,9 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg2://docflow:docflow@postgres:5432/docflow
       REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      PROCESSING_MODE: async
       UPLOAD_DIR: /app/uploads
     ports:
       - "8000:8000"
@@ -57,6 +60,9 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg2://docflow:docflow@postgres:5432/docflow
       REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      PROCESSING_MODE: async
       UPLOAD_DIR: /app/uploads
     volumes:
       - ../apps/api:/app
@@ -66,7 +72,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-    command: celery -A app.workers.celery_app.celery_app worker -l info
+    command: celery -A app.workers.celery_app worker --loglevel=info
 
   web:
     build:

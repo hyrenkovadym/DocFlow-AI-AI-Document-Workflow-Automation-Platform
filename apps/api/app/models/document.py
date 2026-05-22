@@ -9,6 +9,11 @@ from sqlalchemy.types import JSON
 from app.db.base import Base
 from app.models.enums import DocumentStatus, DocumentType
 
+
+def enum_values(enum_cls):
+    return [member.value for member in enum_cls]
+
+
 json_type = JSON().with_variant(JSONB, "postgresql")
 
 
@@ -25,10 +30,10 @@ class Document(Base):
     stored_filename: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     file_type: Mapped[str] = mapped_column(String(20), nullable=False)
     status: Mapped[DocumentStatus] = mapped_column(
-        Enum(DocumentStatus), default=DocumentStatus.UPLOADED, nullable=False, index=True
+        Enum(DocumentStatus, values_callable=enum_values), default=DocumentStatus.UPLOADED, nullable=False, index=True
     )
     document_type: Mapped[DocumentType] = mapped_column(
-        Enum(DocumentType), default=DocumentType.UNKNOWN, nullable=False, index=True
+        Enum(DocumentType, values_callable=enum_values), default=DocumentType.UNKNOWN, nullable=False, index=True
     )
     extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     ai_confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)

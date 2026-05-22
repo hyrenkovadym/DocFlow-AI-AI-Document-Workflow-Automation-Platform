@@ -15,11 +15,16 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg2://docflow:docflow@localhost:5432/docflow"
     redis_url: str = "redis://localhost:6379/0"
+    celery_broker_url: str | None = None
+    celery_result_backend: str | None = None
+    celery_task_always_eager: bool = False
+    celery_task_eager_propagates: bool = True
 
     secret_key: str = "replace-this-in-production"
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
 
+    processing_mode: str = "async"
     upload_dir: str = "uploads"
     max_upload_size_mb: int = 10
     allowed_file_types: str = "pdf,docx,txt"
@@ -46,6 +51,23 @@ class Settings(BaseSettings):
     @property
     def resolved_upload_dir(self) -> Path:
         return Path(self.upload_dir).resolve()
+
+    @property
+    def normalized_processing_mode(self) -> str:
+        mode = self.processing_mode.strip().lower()
+        return mode if mode in {"sync", "async"} else "sync"
+
+    @property
+    def is_async_processing(self) -> bool:
+        return self.normalized_processing_mode == "async"
+
+    @property
+    def resolved_celery_broker_url(self) -> str:
+        return self.celery_broker_url or self.redis_url
+
+    @property
+    def resolved_celery_result_backend(self) -> str:
+        return self.celery_result_backend or self.redis_url
 
 
 @lru_cache

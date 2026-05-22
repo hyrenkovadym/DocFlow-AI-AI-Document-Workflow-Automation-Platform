@@ -1,60 +1,56 @@
-﻿# Architecture
+# Architecture
 
-DocFlow AI is organized as a full-stack web app with a clear API-first backend and a Next.js frontend.
+DocFlow AI is a full-stack API-first system with asynchronous document processing and human review controls.
 
-## Components
-- **Web (`apps/web`)**: Next.js App Router UI for auth, dashboard, documents, upload, review, and audit pages.
-- **API (`apps/api`)**: FastAPI service for auth, document intake, synchronous processing pipeline, review, export, and audit.
-- **Database (PostgreSQL)**: persistent storage for users, documents, extractions, review tasks, audit logs, and exports.
-- **Redis**: present in infrastructure for future async jobs; not required in active MVP runtime path.
-- **Worker scaffold (`apps/api/app/workers`)**: kept for future Celery phase, not used in current MVP flow.
+## Core components
+- **Web (`apps/web`)**: Next.js UI for auth, dashboard, upload, documents, reviews, and audit visibility.
+- **API (`apps/api`)**: FastAPI app for auth, permissions, intake, review, export, and audit endpoints.
+- **Worker (`apps/api/app/workers`)**: Celery worker that executes document extraction/classification pipeline.
+- **PostgreSQL**: system of record for users, documents, extraction data, review tasks, exports, and audit logs.
+- **Redis**: Celery broker/result backend for async task dispatch.
+
+## Backend layering
+- `api/routes/*`: endpoint definitions and request/response boundaries.
+- `services/*`: business workflows (document, workflow, parser, AI, export, audit).
+- `models/*`: SQLAlchemy entities and relationships.
+- `schemas/*`: Pydantic models.
+- `workers/*`: Celery app + tasks.
 
 ## Frontend architecture
 - `app/*`: route pages (`/login`, `/dashboard`, `/documents`, `/upload`, `/reviews`, `/audit-logs`).
-- `components/*`: reusable UI components (`Layout`, `Sidebar`, `Card`, `DataTable`, `StatusBadge`, states, buttons).
-- `lib/api.ts`: centralized API client and error handling.
-- `lib/auth.ts`: token/role session helpers for demo-mode auth persistence.
-- `lib/types.ts`: shared TypeScript contracts for API payloads.
+- `components/*`: reusable UI primitives.
+- `lib/api.ts`: centralized fetch client + HTTP error normalization.
+- `lib/auth.ts`: JWT storage/session helpers.
+- `lib/types.ts`: shared API contracts.
 
-## Backend architecture
-- `api/routes`: HTTP endpoints and access boundaries.
-- `services`: business logic (auth, document, workflow, export, audit, AI, parser).
-- `models`: SQLAlchemy entities.
-- `schemas`: Pydantic request/response schemas.
-- `alembic`: schema migrations.
+## Processing topology
+1. Client uploads file to `POST /api/documents/upload`.
+2. API validates file and stores metadata.
+3. API sets status `queued` and enqueues Celery task.
+4. Worker sets status `processing`, extracts text, runs Mock AI, writes extraction/review task.
+5. Worker sets status `needs_review` (or `failed` on errors).
+6. Reviewer/admin resolves review; approved docs become exportable.
 
-## Frontend <-> backend communication
-1. User logs in via `POST /api/auth/login`.
-2. Frontend stores JWT token in local storage (demo mode).
-3. All protected requests include `Authorization: Bearer <token>`.
-4. Frontend pages call backend endpoints directly through `lib/api.ts`.
-5. API errors (`401`, `403`, validation errors) are surfaced as clear UI messages.
-
-## Data flow (current MVP)
-1. User uploads document from UI.
-2. API stores metadata and file bytes.
-3. API runs synchronous pipeline: parse -> mock classify -> extract fields.
-4. API stores extraction + review task and sets status `needs_review`.
-5. Reviewer/admin approves or rejects.
-6. Approved document can be exported.
-7. Audit events are persisted across all critical steps.
+## Processing modes
+- `PROCESSING_MODE=async` (default): API enqueues and returns quickly.
+- `PROCESSING_MODE=sync`: API executes pipeline inline (fallback for tests/debugging).
 
 ## Text diagram
-
 ```text
 [Next.js Frontend]
         |
-        | HTTP (JWT)
+        | HTTP + JWT
         v
-[FastAPI API] --------------------> [PostgreSQL]
+[FastAPI API] ------------------------------> [PostgreSQL]
         |
-        +-- synchronous parse + mock AI + review task creation
-
-[Redis + Celery worker scaffold exists for future async phase]
+        | enqueue process_document_task
+        v
+      [Redis]
+        |
+        v
+[Celery Worker] ---> parse + mock classify + extract + review task + audits
 ```
 
-## Extension points
-- Switch from mock AI to OpenAI-compatible provider via config.
-- Activate async worker execution using existing scaffolding.
-- Add OCR/image intake and external export integrations.
-- Add multi-tenant boundaries and advanced observability.
+## Docker notes
+- `api` and `worker` share the same uploads volume so worker can read files stored by API.
+- `postgres` and `redis` are provided in `infra/docker-compose.yml`.

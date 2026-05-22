@@ -67,6 +67,7 @@ export default function UploadPage() {
       <Card className="max-w-2xl">
         <h2 className="text-lg font-semibold text-ink">Upload document</h2>
         <p className="mt-1 text-sm text-slate-600">Supported formats: TXT, PDF, DOCX.</p>
+        <p className="mt-1 text-sm text-slate-600">After upload, processing runs in the background and status updates to review-ready.</p>
 
         <form className="mt-5 space-y-4" onSubmit={onSubmit}>
           <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4">
@@ -87,7 +88,7 @@ export default function UploadPage() {
 
           <div className="flex gap-2">
             <Button type="submit" disabled={loading || !file}>
-              {loading ? "Uploading and processing..." : "Upload document"}
+              {loading ? "Uploading..." : "Upload document"}
             </Button>
             <Button type="button" variant="secondary" onClick={() => router.push("/documents")}>
               Go to documents

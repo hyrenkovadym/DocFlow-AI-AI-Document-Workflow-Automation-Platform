@@ -1,26 +1,26 @@
-﻿# AI Pipeline (Phase 2 MVP)
+# AI Pipeline (Phase 5)
 
 ## Overview
-Current MVP uses a synchronous, backend-only pipeline with a mock AI provider by default.
+DocFlow AI uses a background worker pipeline. The API enqueues processing, and Celery workers execute extraction and AI classification.
 
-## Step 1: File text extraction
+## Stage 1: Text extraction
 Supported parsers:
-- TXT: direct UTF-8/ignore read
-- PDF: `pypdf`
-- DOCX: `python-docx`
+- TXT: UTF-8 read (`errors="ignore"`).
+- PDF: `pypdf`.
+- DOCX: `python-docx`.
 
-If file type is unsupported or extraction result is empty, processing fails and is audited.
+If extraction fails or output is empty, document is marked `failed`.
 
-## Step 2: Classification
-`AIProvider.classify_document(text)` returns one of:
+## Stage 2: Classification
+`AIProvider.classify_document(text)` returns:
 - `invoice`
 - `contract`
 - `request`
 - `report`
 - `unknown`
 
-## Step 3: Structured extraction
-`AIProvider.extract_fields(text, document_type)` returns validated fields:
+## Stage 3: Structured field extraction
+`AIProvider.extract_fields(text, document_type)` returns:
 - `document_type`
 - `title`
 - `summary`
@@ -31,28 +31,29 @@ If file type is unsupported or extraction result is empty, processing fails and 
 - `recommended_action`
 - `confidence_score`
 
-## Step 4: Validation and persistence
-- All AI output is validated by Pydantic schemas.
-- Structured data is stored in `DocumentExtraction`.
-- Confidence and classification metadata are stored on `Document`.
+## Stage 4: Validation and persistence
+- AI output is validated by Pydantic schemas.
+- Structured payload is stored in `DocumentExtraction`.
+- `document_type`, confidence, and pipeline metadata are stored on `Document`.
 
-## Step 5: Human-in-the-loop handoff
+## Stage 5: Human review handoff
+- Review task is created/updated to `pending`.
 - Document status transitions to `needs_review`.
-- `ReviewTask` is created/updated as `pending`.
-- Reviewer/admin makes final approve/reject decision.
+- Reviewer/admin makes final decision (`approve`/`reject`).
 
 ## Providers
 ### MockAIProvider (default)
 - deterministic keyword-based behavior,
-- safe for local development and CI,
-- no network dependency.
+- safe for local dev/CI,
+- no external network dependency.
 
-### OpenAICompatibleProvider (available but not required in this phase)
-- enabled with `AI_PROVIDER=openai`,
-- uses OpenAI-compatible chat completions endpoint,
-- never used in tests.
+### OpenAICompatibleProvider (available, not activated by default)
+- enabled by `AI_PROVIDER=openai`,
+- requires environment API key/base URL/model,
+- not used in tests.
 
 ## Key audit events
+- `document_uploaded`
 - `document_processing_started`
 - `document_text_extracted`
 - `ai_extraction_completed`
