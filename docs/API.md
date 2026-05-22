@@ -1,4 +1,4 @@
-# API Reference (Phase 7)
+# API Reference (v1.0.0)
 
 Base prefix: `/api`
 

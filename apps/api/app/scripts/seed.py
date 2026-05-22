@@ -7,21 +7,21 @@ from app.models.user import User
 
 SEED_USERS = [
     {
-        "email": "admin@docflow.local",
-        "full_name": "DocFlow Admin",
-        "password": "AdminPass123!",
+        "email": "admin@example.com",
+        "full_name": "Demo Admin",
+        "password": "Password123!",
         "role": UserRole.ADMIN,
     },
     {
-        "email": "reviewer@docflow.local",
-        "full_name": "DocFlow Reviewer",
-        "password": "ReviewerPass123!",
+        "email": "reviewer@example.com",
+        "full_name": "Demo Reviewer",
+        "password": "Password123!",
         "role": UserRole.REVIEWER,
     },
     {
-        "email": "user@docflow.local",
-        "full_name": "DocFlow User",
-        "password": "UserPass123!",
+        "email": "user@example.com",
+        "full_name": "Demo User",
+        "password": "Password123!",
         "role": UserRole.USER,
     },
 ]
@@ -50,4 +50,4 @@ def run_seed() -> None:
 
 if __name__ == "__main__":
     run_seed()
-    print("Seed data created or already exists.")
+    print("Seed data created (or already exists) for local demo users.")

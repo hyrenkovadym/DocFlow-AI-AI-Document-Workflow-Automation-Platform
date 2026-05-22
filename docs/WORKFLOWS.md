@@ -1,4 +1,4 @@
-# Workflows (Phase 7)
+# Workflows (v1.0.0)
 
 ## End-to-end flow
 1. User logs in.

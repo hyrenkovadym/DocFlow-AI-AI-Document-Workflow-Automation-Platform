@@ -1,4 +1,4 @@
-# AI Pipeline (Phase 7)
+# AI Pipeline (v1.0.0)
 
 ## Provider strategy
 - Default: `MockAIProvider` (`AI_PROVIDER=mock`)

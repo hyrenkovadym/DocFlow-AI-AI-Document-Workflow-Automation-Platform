@@ -1,6 +1,6 @@
 # Roadmap
 
-## Next phase (Portfolio polish / v1.0 candidate)
+## Post-v1.0 priorities
 - Production deployment profile and environment hardening.
 - CI enhancements:
   - migration checks,

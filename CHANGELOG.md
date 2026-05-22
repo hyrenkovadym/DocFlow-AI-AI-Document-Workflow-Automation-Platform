@@ -1,5 +1,19 @@
 # Changelog
 
+All notable changes to this project are documented in this file.
+
+## v1.0.0
+- Full-stack document workflow MVP
+- Async Celery processing
+- Mock/OpenAI-compatible AI providers
+- Human review workflow
+- Export system
+- Audit logs
+- Observability and request tracing
+- Frontend dashboard
+- Dockerized local development
+- Tests and CI-ready structure
+
 ## 0.2.0 - 2026-05-21
 - Built DocFlow AI MVP full-stack architecture from scratch.
 - Added FastAPI backend with JWT auth, RBAC, document lifecycle, review workflow, audit logs, exports.

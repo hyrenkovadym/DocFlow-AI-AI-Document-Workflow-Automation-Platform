@@ -12,6 +12,7 @@ __pycache__/
 .env
 .env.*
 !.env.example
+.env.local
 venv/
 .venv/
 
@@ -27,6 +28,12 @@ build/
 
 # Local data
 uploads/
+secrets/
+credentials/
+*.secret
+*.secrets
+*service-account*.json
+service-account*.json
 *.sqlite
 *.db
 

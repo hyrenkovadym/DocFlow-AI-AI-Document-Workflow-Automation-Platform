@@ -46,9 +46,8 @@ jobs:
 
       - name: Run backend tests
         env:
-          DATABASE_URL: postgresql+psycopg2://docflow:docflow@localhost:5432/docflow
-          REDIS_URL: redis://localhost:6379/0
           AI_PROVIDER: mock
+          PROCESSING_MODE: sync
           SECRET_KEY: test-secret
         run: |
           cd apps/api
@@ -67,7 +66,7 @@ jobs:
       - name: Install frontend dependencies
         run: |
           cd apps/web
-          npm install
+          npm ci
 
       - name: Frontend lint
         run: |
