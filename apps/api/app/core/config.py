@@ -10,6 +10,7 @@ ROOT_DIR = API_DIR.parents[1] if len(API_DIR.parents) > 1 else API_DIR
 
 class Settings(BaseSettings):
     project_name: str = "DocFlow AI"
+    app_version: str = "0.1.0"
     environment: str = "development"
     api_v1_prefix: str = "/api"
 
@@ -70,6 +71,10 @@ class Settings(BaseSettings):
     def resolved_ai_provider(self) -> str:
         provider = self.ai_provider.strip().lower()
         return provider if provider in {"mock", "openai"} else "mock"
+
+    @property
+    def is_redis_configured(self) -> bool:
+        return bool(self.redis_url.strip())
 
     @property
     def resolved_celery_broker_url(self) -> str:

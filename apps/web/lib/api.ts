@@ -20,10 +20,12 @@ interface ApiRequestOptions extends Omit<RequestInit, "body"> {
 
 export class ApiError extends Error {
   status: number;
+  requestId: string | null;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, requestId: string | null = null) {
     super(message);
     this.status = status;
+    this.requestId = requestId;
     this.name = "ApiError";
   }
 }
@@ -58,6 +60,7 @@ async function request<T>(path: string, options: ApiRequestOptions = {}): Promis
 
   if (!response.ok) {
     let detail = "Request failed";
+    const requestId = response.headers.get("X-Request-ID");
     const contentType = response.headers.get("content-type") ?? "";
     if (contentType.includes("application/json")) {
       const payload = await response.json().catch(() => null);
@@ -72,7 +75,8 @@ async function request<T>(path: string, options: ApiRequestOptions = {}): Promis
         detail = textPayload.trim();
       }
     }
-    throw new ApiError(detail, response.status);
+    const message = requestId ? `${detail} (request_id: ${requestId})` : detail;
+    throw new ApiError(message, response.status, requestId);
   }
 
   if (response.status === 204) {

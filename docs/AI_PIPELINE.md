@@ -1,82 +1,50 @@
-# AI Pipeline (Phase 6)
+# AI Pipeline (Phase 7)
 
-## Overview
-DocFlow AI uses a background worker pipeline. The API enqueues processing, and Celery workers execute extraction and AI classification.
+## Provider strategy
+- Default: `MockAIProvider` (`AI_PROVIDER=mock`)
+- Optional: `OpenAICompatibleProvider` (`AI_PROVIDER=openai`)
 
-## Stage 1: Text extraction
-Supported parsers:
-- TXT: UTF-8 read (`errors="ignore"`).
-- PDF: `pypdf`.
-- DOCX: `python-docx`.
+OpenAI mode is optional and never required for tests or local demo.
 
-If extraction fails or output is empty, document is marked `failed`.
-
-## Stage 2: Classification
-`AIProvider.classify_document(text)` returns:
-- `invoice`
-- `contract`
-- `request`
-- `report`
-- `unknown`
-
-## Stage 3: Structured field extraction
-`AIProvider.extract_fields(text, document_type)` returns:
-- `document_type`
+## Extraction schema
+Validated fields:
+- `document_type` (`invoice|contract|request|report|unknown`)
 - `title`
 - `summary`
 - `dates`
 - `people_or_companies`
 - `amount`
-- `priority`
+- `priority` (`low|medium|high`)
 - `recommended_action`
-- `confidence_score`
+- `confidence_score` (`0..1`)
 
-Allowed values:
-- `document_type`: `invoice`, `contract`, `request`, `report`, `unknown`
-- `priority`: `low`, `medium`, `high`
-- `confidence_score`: `0..1`
+## Runtime flow
+1. Worker extracts text.
+2. Provider classifies document.
+3. Provider extracts structured fields.
+4. Pydantic validation enforces schema.
+5. Document extraction + metadata are persisted.
+6. Review task is created/updated.
 
-## Stage 4: Validation and persistence
-- AI output is validated by Pydantic schemas before persistence.
-- Structured payload is stored in `DocumentExtraction`.
-- `document_type`, confidence, and pipeline metadata are stored on `Document`.
+## Safety and failure handling
+- Missing key in openai mode -> document-level failure.
+- Timeout/network/rate-limit/invalid JSON/schema errors -> document-level failure.
+- Worker process remains healthy; failures are isolated to document records.
 
-## Stage 5: Human review handoff
-- Review task is created/updated to `pending`.
-- Document status transitions to `needs_review`.
-- Reviewer/admin makes final decision (`approve`/`reject`).
+## Confidence and review
+- Confidence score is persisted.
+- `below_threshold` flag is set from configured minimum confidence.
+- Human review remains required before export decisions.
 
-## Providers
-### MockAIProvider (default)
-- deterministic keyword-based behavior,
-- safe for local dev/CI,
-- no external network dependency.
+## Observability
+- Structured logs track AI stage events.
+- Audit events:
+  - `ai_extraction_completed`
+  - `ai_extraction_failed` (when applicable)
+- Duration metadata is attached (`processing_duration_ms`) for operational visibility.
 
-### OpenAICompatibleProvider (optional)
-- enabled by `AI_PROVIDER=openai`,
-- requires `OPENAI_API_KEY`,
-- supports custom `OPENAI_BASE_URL`, model, timeout, and retries,
-- requests strict JSON output and validates with Pydantic,
-- malformed/invalid outputs are treated as document-level failures (worker remains healthy),
-- never used in tests (tests mock all external calls).
-
-## Prompt safety rules
-Prompts enforce:
-- JSON-only response,
-- no invented values,
-- use `null`/empty arrays when unknown,
-- output is preliminary automation assistance, not final business truth.
-
-## Failure handling
-- Missing API key in openai mode -> document status `failed` with clear `processing_error`.
-- Timeout/network/rate-limit/invalid JSON/schema failures -> document status `failed`.
-- Worker process does not crash; failures are isolated per document.
-
-## Key audit events
-- `document_uploaded`
-- `document_processing_started`
-- `document_text_extracted`
-- `ai_extraction_completed`
-- `ai_extraction_failed`
-- `review_task_created`
-- `document_processing_failed`
+## Logging policy
+AI logs intentionally avoid:
+- API keys,
+- raw token values,
+- full extracted document text.

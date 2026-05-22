@@ -39,9 +39,10 @@ def test_async_upload_sets_queued_and_enqueues_task(client, db_session, monkeypa
     token = _register_and_login(client, email="async-uploader@example.com")
     enqueued: dict[str, str | None] = {}
 
-    def fake_delay(*, document_id: str, actor_id: str | None = None):
+    def fake_delay(*, document_id: str, actor_id: str | None = None, request_id: str | None = None):
         enqueued["document_id"] = document_id
         enqueued["actor_id"] = actor_id
+        enqueued["request_id"] = request_id
         return None
 
     monkeypatch.setattr(document_service.process_document_task, "delay", fake_delay)
@@ -58,6 +59,7 @@ def test_async_upload_sets_queued_and_enqueues_task(client, db_session, monkeypa
     document_id = payload["id"]
     assert enqueued["document_id"] == document_id
     assert enqueued["actor_id"] is not None
+    assert enqueued["request_id"] is not None
 
     document = db_session.get(Document, UUID(document_id))
     assert document is not None
@@ -168,7 +170,7 @@ def test_async_reprocess_sets_queued_and_enqueues_task(client, db_session, creat
 
     enqueued_ids: list[str] = []
 
-    def fake_delay(*, document_id: str, actor_id: str | None = None):
+    def fake_delay(*, document_id: str, actor_id: str | None = None, request_id: str | None = None):
         enqueued_ids.append(document_id)
         return None
 

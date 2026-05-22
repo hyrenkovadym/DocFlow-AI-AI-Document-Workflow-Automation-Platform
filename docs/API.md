@@ -1,4 +1,4 @@
-# API Reference (Phase 6 Async + AI Provider)
+# API Reference (Phase 7)
 
 Base prefix: `/api`
 
@@ -9,81 +9,64 @@ Base prefix: `/api`
 
 ## Documents
 - `POST /documents/upload`
-  - Auth required.
-  - Multipart field: `file`.
-  - Supported types: `txt`, `pdf`, `docx`.
-  - Validates:
-    - empty file -> `400`
-    - unsupported type -> `400`
-    - oversized file -> `413`
-  - `PROCESSING_MODE=async`:
-    - creates document with status `queued`,
-    - enqueues Celery task,
-    - returns quickly.
-  - `PROCESSING_MODE=sync`:
-    - runs full pipeline inline.
 - `GET /documents`
 - `GET /documents/{id}`
 - `GET /documents/{id}/text`
 - `GET /documents/{id}/extraction`
 - `POST /documents/{id}/reprocess`
-  - owner/reviewer/admin only,
-  - async mode: sets `queued` + enqueues task,
-  - sync mode: runs inline,
-  - regular user cannot reprocess others' documents.
 - `GET /documents/{id}/export.json`
 - `GET /documents/{id}/export.csv`
-  - export allowed only for `approved` or `exported`,
-  - any other status -> `409`,
-  - each export creates new export record + audit event.
 
 ## Review
-- `GET /reviews/queue` (reviewer/admin)
-- `POST /reviews/{document_id}/approve` (reviewer/admin)
-- `POST /reviews/{document_id}/reject` (reviewer/admin)
-- `PATCH /reviews/{document_id}/fields` (reviewer/admin)
+- `GET /reviews/queue`
+- `POST /reviews/{document_id}/approve`
+- `POST /reviews/{document_id}/reject`
+- `PATCH /reviews/{document_id}/fields`
 
 ## Audit
-- `GET /audit-logs` (admin only)
+- `GET /audit-logs`
 
-## System
+## Operational endpoints
+- `GET /health`
+  - liveness-oriented app status.
+- `GET /ready`
+  - readiness/dependency status:
+    - `dependencies.database.ok`
+    - `dependencies.redis.ok`
+    - `dependencies.redis.required`
+  - includes `processing_mode` and `ai_provider`.
 - `GET /system/info`
-  - Safe non-secret runtime information:
+  - safe runtime metadata:
+    - `app_name`
+    - `version`
+    - `app_env`
     - `processing_mode`
     - `ai_provider`
-    - `app_env`
+    - `redis_configured`
+    - `docs_url`
+    - `openapi_url`
 
-## Health
-- `GET /health`
-- `GET /ready`
+## Request ID behavior
+- API accepts optional request header: `X-Request-ID`.
+- If provided, API preserves it.
+- If missing, API generates one.
+- Response always returns `X-Request-ID`.
 
 ## Status lifecycle
-- Intake: `uploaded` (sync only) or `queued` (async)
-- Worker: `processing`
-- Review handoff: `needs_review`
-- Review outcome: `approved` or `rejected`
-- Exported: `exported`
-- Failure: `failed`
+- `queued` -> `processing` -> `needs_review`
+- final states: `approved`, `rejected`, `exported`, `failed`
 
-## AI provider behavior
-- `AI_PROVIDER=mock` (default): no external AI key required.
-- `AI_PROVIDER=openai`:
-  - requires `OPENAI_API_KEY`,
-  - uses OpenAI-compatible chat endpoint (`OPENAI_BASE_URL`),
-  - timeout/retry controlled by env,
-  - invalid/malformed AI responses fail the document safely (worker remains up).
+## AI provider runtime
+- `AI_PROVIDER=mock` (default)
+- `AI_PROVIDER=openai` (optional)
+  - requires `OPENAI_API_KEY`
+  - supports configurable base URL/model/timeout/retries
 
-## Permission summary
-- `user`: only own documents, no review queue, no audit logs.
-- `reviewer`: review queue + review actions, can access docs under current policy.
-- `admin`: reviewer permissions + audit logs access.
-
-## Export payload (JSON)
-`GET /api/documents/{id}/export.json` returns:
-- document metadata (`document_id`, `owner_id`, filename, status, type),
-- confidence and `structured_fields`,
-- review fields (`review_status`, `reviewer_comment`),
-- export metadata (`exported_at`, `exported_by_id`).
+## Secrets policy
+Operational endpoints and standard responses never expose:
+- API keys
+- JWT secrets
+- database/redis passwords
 
 ## Interactive docs
 - Swagger UI: `/docs`

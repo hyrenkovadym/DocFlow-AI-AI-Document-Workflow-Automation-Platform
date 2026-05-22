@@ -165,6 +165,10 @@ export default function DocumentDetailPage() {
   const isLowConfidence = documentData?.metadata_json?.below_threshold === true;
   const aiProviderLabel =
     typeof documentData?.metadata_json?.ai_provider === "string" ? documentData.metadata_json.ai_provider : "unknown";
+  const processingDurationMs =
+    typeof documentData?.metadata_json?.processing_duration_ms === "number"
+      ? documentData.metadata_json.processing_duration_ms
+      : null;
 
   return (
     <Layout title="Document Detail" description="Inspect extracted text, structured fields, and workflow actions.">
@@ -207,12 +211,22 @@ export default function DocumentDetailPage() {
                 {aiProviderLabel}
               </p>
               <p>
+                <span className="font-semibold text-slate-700">Processing duration:</span>{" "}
+                {processingDurationMs !== null ? `${processingDurationMs} ms` : "N/A"}
+              </p>
+              <p>
                 <span className="font-semibold text-slate-700">Owner ID:</span> {documentData.owner_id}
               </p>
               <p>
                 <span className="font-semibold text-slate-700">Updated:</span> {formatDate(documentData.updated_at)}
               </p>
             </div>
+
+            {documentData.status === "failed" && documentData.processing_error ? (
+              <p className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">
+                Processing failed: {documentData.processing_error}
+              </p>
+            ) : null}
 
             <div className="mt-4 flex flex-wrap gap-2">
               <Button variant="secondary" onClick={onRefresh} disabled={busyAction !== null || refreshing}>

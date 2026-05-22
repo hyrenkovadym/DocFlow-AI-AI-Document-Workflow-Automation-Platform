@@ -1,3 +1,4 @@
+import logging
 import uuid
 from pathlib import Path
 from uuid import UUID
@@ -7,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.request_context import get_request_id
 from app.models.document import Document, DocumentExtraction
 from app.models.enums import DocumentStatus, UserRole
 from app.models.user import User
@@ -14,6 +16,8 @@ from app.services.audit_service import log_event
 from app.services.workflow_service import process_document_pipeline_sync
 from app.utils.file_storage import ensure_directory, write_bytes
 from app.workers.tasks import process_document_task
+
+logger = logging.getLogger(__name__)
 
 
 def _validate_upload(filename: str, content: bytes) -> str:
@@ -37,7 +41,7 @@ def _validate_upload(filename: str, content: bytes) -> str:
 
 
 def _enqueue_document_processing(*, document_id: str, actor_id: str) -> None:
-    process_document_task.delay(document_id=document_id, actor_id=actor_id)
+    process_document_task.delay(document_id=document_id, actor_id=actor_id, request_id=get_request_id())
 
 
 def create_document_and_process(db: Session, *, owner: User, filename: str, content: bytes) -> Document:
@@ -80,6 +84,15 @@ def create_document_and_process(db: Session, *, owner: User, filename: str, cont
         try:
             _enqueue_document_processing(document_id=str(document.id), actor_id=str(owner.id))
             db.refresh(document)
+            logger.info(
+                "document.enqueued",
+                extra={
+                    "event": "document_enqueued",
+                    "document_id": str(document.id),
+                    "user_id": str(owner.id),
+                    "status": document.status.value,
+                },
+            )
             return document
         except Exception as exc:
             document.status = DocumentStatus.FAILED
@@ -93,6 +106,16 @@ def create_document_and_process(db: Session, *, owner: User, filename: str, cont
                 entity_id=str(document.id),
                 actor_id=str(owner.id),
                 metadata={"error": document.processing_error},
+            )
+            logger.exception(
+                "document.enqueue.failed",
+                extra={
+                    "event": "document_enqueue_failed",
+                    "document_id": str(document.id),
+                    "user_id": str(owner.id),
+                    "status": document.status.value,
+                    "failure_reason": document.processing_error,
+                },
             )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -164,6 +187,15 @@ def reprocess_document(db: Session, *, document_id: str, user: User) -> Document
         try:
             _enqueue_document_processing(document_id=str(document.id), actor_id=str(user.id))
             db.refresh(document)
+            logger.info(
+                "document.reprocess.enqueued",
+                extra={
+                    "event": "document_reprocess_enqueued",
+                    "document_id": str(document.id),
+                    "user_id": str(user.id),
+                    "status": document.status.value,
+                },
+            )
             return document
         except Exception as exc:
             document.status = DocumentStatus.FAILED
@@ -176,6 +208,16 @@ def reprocess_document(db: Session, *, document_id: str, user: User) -> Document
                 entity_id=str(document.id),
                 actor_id=str(user.id),
                 metadata={"error": document.processing_error},
+            )
+            logger.exception(
+                "document.reprocess.enqueue.failed",
+                extra={
+                    "event": "document_reprocess_enqueue_failed",
+                    "document_id": str(document.id),
+                    "user_id": str(user.id),
+                    "status": document.status.value,
+                    "failure_reason": document.processing_error,
+                },
             )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

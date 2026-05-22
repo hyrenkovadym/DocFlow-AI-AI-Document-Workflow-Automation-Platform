@@ -1,82 +1,74 @@
 # DocFlow AI
 
-**AI-powered document intake and workflow automation platform**
-
-DocFlow AI is a production-style full-stack portfolio project that demonstrates realistic internal automation workflows: secure upload, AI-assisted extraction, human review, export, and full auditability.
+AI-powered document intake and workflow automation platform.
 
 ## Current phase
-Phase 6 AI provider integration is implemented:
-- uploads are queued immediately,
-- processing runs in background via Redis + Celery,
-- sync processing remains available via config fallback for tests/local debugging.
-- provider selection is configurable (`mock` by default, `openai` optional).
+Phase 7 adds production-oriented observability and monitoring polish:
+- structured JSON logs for API and worker,
+- request ID propagation (`X-Request-ID`),
+- processing timing metadata (`processing_duration_ms`),
+- improved `/api/health`, `/api/ready`, and `/api/system/info`.
+
+Core workflow is unchanged:
+upload -> queued -> processing -> needs_review -> approve/reject -> export.
 
 ## Tech stack
 - Backend: FastAPI, SQLAlchemy 2.x, Alembic, PostgreSQL, Redis, Celery, Pydantic
-- Frontend: Next.js (App Router), React, TypeScript, Tailwind CSS
+- Frontend: Next.js, React, TypeScript, Tailwind CSS
 - Tooling: pytest, ruff, Docker Compose, GitHub Actions
-
-## Core features
-- JWT auth + RBAC (`admin`, `reviewer`, `user`)
-- File upload (`txt`, `pdf`, `docx`) with size/type validation
-- Async processing pipeline (`queued -> processing -> needs_review/failed`)
-- AI provider abstraction with safe fallback:
-  - `MockAIProvider` (default, test/demo/local),
-  - `OpenAICompatibleProvider` (enabled by env config).
-- Human-in-the-loop review queue (approve/reject/edit fields)
-- Audit logs for critical workflow events
-- JSON/CSV export for approved/exported documents
-- Reprocess endpoint with role-aware access control
-
-## Frontend pages
-- `/login`
-- `/register`
-- `/dashboard`
-- `/documents`
-- `/upload`
-- `/documents/{id}`
-- `/reviews`
-- `/audit-logs`
-
-## Permissions (MVP)
-- `user`:
-  - can upload documents,
-  - can list/view/export/reprocess only own documents,
-  - cannot access review queue,
-  - cannot approve/reject,
-  - cannot access audit logs.
-- `reviewer`:
-  - can access review queue,
-  - can approve/reject and patch extraction fields,
-  - can export documents as allowed by current workflow design,
-  - cannot access audit logs.
-- `admin`:
-  - full reviewer capabilities,
-  - can access audit logs.
-
-## Async processing modes
-- `PROCESSING_MODE=async` (default): upload/reprocess enqueue Celery task and return quickly with `queued`.
-- `PROCESSING_MODE=sync`: upload/reprocess run full pipeline inside API request (test/debug fallback).
 
 ## AI provider modes
 - `AI_PROVIDER=mock` (default): no external API key required.
-- `AI_PROVIDER=openai`: uses OpenAI-compatible chat endpoint.
-- If `AI_PROVIDER=openai` and `OPENAI_API_KEY` is missing, processing fails safely per document (worker stays healthy).
+- `AI_PROVIDER=openai`: OpenAI-compatible endpoint support.
+- If openai mode is enabled without key, document processing fails safely per-document; worker remains healthy.
+
+Required vars for openai mode:
+- `OPENAI_API_KEY`
+- `OPENAI_BASE_URL` (default `https://api.openai.com/v1`)
+- `OPENAI_MODEL`
+- `OPENAI_TIMEOUT_SECONDS`
+- `OPENAI_MAX_RETRIES`
+
+## Observability highlights
+- Structured logs include:
+  - timestamp, level, logger name,
+  - request_id (when available),
+  - event/action,
+  - document_id/user_id (when safe),
+  - status/processing_status,
+  - duration_ms (when available).
+- Request ID middleware:
+  - preserves incoming `X-Request-ID`,
+  - generates one when missing,
+  - returns it in response header,
+  - propagates into audit metadata where possible.
+- Processing metadata stored safely on document:
+  - `processing_started_at`
+  - `processing_finished_at`
+  - `processing_duration_ms`
+
+## Safe endpoints
+- `GET /api/health`
+- `GET /api/ready`
+  - reports dependency status (`database`, `redis`),
+  - includes `processing_mode`, `ai_provider`,
+  - does not require OpenAI.
+- `GET /api/system/info`
+  - safe runtime config only:
+    - `app_name`, `version`, `app_env`,
+    - `processing_mode`, `ai_provider`,
+    - `redis_configured`, `docs_url`, `openapi_url`.
+
+No secrets are exposed by these endpoints.
 
 ## Local setup
-### 1. Clone and configure
 ```bash
 git clone <repo-url>
 cd docflow-ai
 cp .env.example .env
 ```
 
-### 2. Start infrastructure
-```bash
-docker compose -f infra/docker-compose.yml up -d postgres redis
-```
-
-### 3. Backend setup
+Install backend:
 ```bash
 cd apps/api
 pip install -e .[dev]
@@ -84,19 +76,19 @@ alembic upgrade head
 python -m app.scripts.seed
 ```
 
-### 4. Run API
+Run API:
 ```bash
 cd apps/api
 uvicorn app.main:app --reload --port 8000
 ```
 
-### 5. Run worker
+Run worker:
 ```bash
 cd apps/api
 celery -A app.workers.celery_app worker --loglevel=info
 ```
 
-### 6. Run frontend
+Run frontend:
 ```bash
 cd apps/web
 cp .env.example .env.local
@@ -104,60 +96,35 @@ npm install
 npm run dev
 ```
 
-## Docker full stack
+## Docker demo
 ```bash
 docker compose -f infra/docker-compose.yml up --build
 docker exec docflow-api alembic upgrade head
 ```
 
-Services:
+URLs:
 - Frontend: `http://localhost:3000`
-- Backend docs: `http://localhost:8000/docs`
+- Swagger: `http://localhost:8000/docs`
 - Health: `http://localhost:8000/api/health`
+- Ready: `http://localhost:8000/api/ready`
 - System info: `http://localhost:8000/api/system/info`
 
-## Environment variables
-Main runtime variables:
-- `DATABASE_URL`
-- `REDIS_URL`
-- `CELERY_BROKER_URL`
-- `CELERY_RESULT_BACKEND`
-- `PROCESSING_MODE` (`async` or `sync`)
-- `UPLOAD_DIR`
-- `MAX_UPLOAD_SIZE_MB`
-- `ALLOWED_FILE_TYPES`
-- `AI_PROVIDER` (`mock` by default)
-- `OPENAI_API_KEY`
-- `OPENAI_BASE_URL` (default: `https://api.openai.com/v1`)
-- `OPENAI_MODEL` (default: `gpt-4o-mini`)
-- `OPENAI_TIMEOUT_SECONDS` (default: `30`)
-- `OPENAI_MAX_RETRIES` (default: `2`)
-
-### Run fully without AI key (recommended local/demo)
+Inspect worker logs:
 ```bash
-AI_PROVIDER=mock
+docker logs -f docflow-worker
 ```
 
-### Enable OpenAI-compatible provider locally
-```bash
-AI_PROVIDER=openai
-OPENAI_API_KEY=your_key_here
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_MODEL=gpt-4o-mini
-OPENAI_TIMEOUT_SECONDS=30
-OPENAI_MAX_RETRIES=2
-```
-
-No real API keys are required for tests, and tests never call real external AI APIs.
-
-Frontend:
-- `NEXT_PUBLIC_API_BASE_URL` (default: `http://localhost:8000/api`)
-
-## Demo credentials (local seed)
-Generated by `python -m app.scripts.seed`:
-- Admin: `admin@docflow.local` / `AdminPass123!`
-- Reviewer: `reviewer@docflow.local` / `ReviewerPass123!`
-- User: `user@docflow.local` / `UserPass123!`
+## Demo checklist
+1. Start Docker Compose.
+2. Run migrations.
+3. Open frontend.
+4. Register/login as user.
+5. Upload TXT document.
+6. Watch status transition `queued -> processing -> needs_review`.
+7. Login as reviewer and approve.
+8. Export JSON.
+9. Login as admin and inspect audit logs.
+10. Verify `X-Request-ID`, processing duration, and `/api/system/info`.
 
 ## Tests and checks
 Backend tests:
@@ -184,21 +151,21 @@ cd apps/web
 npm run build
 ```
 
-## Manual async QA flow
-1. Login as user.
-2. Upload TXT/PDF/DOCX from `/upload`.
-3. Open `/documents/{id}` and confirm status `queued` or `processing`.
-4. Wait for worker or click refresh until status is `needs_review`.
-5. Login as reviewer and approve/reject in `/reviews`.
-6. Export approved document from document details.
-7. Login as admin and verify events in `/audit-logs`.
+Compose validation:
+```bash
+docker compose -f infra/docker-compose.yml config
+```
+
+## Security and logging policy
+Intentionally not logged:
+- API keys,
+- JWT tokens,
+- uploaded file content,
+- full extracted document text,
+- private credentials.
 
 ## Known limitations
-- OpenAI provider path depends on external API availability and quality of model output.
-- OCR/image ingestion is not implemented.
-- Processing uses local file storage in development.
-- No bulk export endpoint yet.
-- Token storage in frontend is demo-level (`localStorage`), documented in security notes.
-
-## Employer-facing summary
-I built **DocFlow AI**, a full-stack AI-powered document workflow automation platform with FastAPI, PostgreSQL, Redis/Celery background processing, Next.js, RBAC, audit logs, human-in-the-loop review, structured extraction, Docker, tests, and CI-ready engineering practices.
+- No OCR/image pipeline yet.
+- Local file storage for uploads in dev mode.
+- No bulk export endpoint.
+- Frontend session storage is demo-level and documented in `docs/SECURITY.md`.

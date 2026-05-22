@@ -154,7 +154,7 @@ def test_reviewer_can_patch_extracted_fields(client, db_session, create_user):
                 "dates": ["2026-05-20"],
                 "people_or_companies": ["Contoso Ltd"],
                 "amount": None,
-                "priority": "normal",
+                "priority": "medium",
                 "recommended_action": "review_content",
                 "confidence_score": 0.91,
             }

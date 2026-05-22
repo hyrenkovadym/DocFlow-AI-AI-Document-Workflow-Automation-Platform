@@ -1,29 +1,30 @@
 # Roadmap
 
-## Next phase (Phase 7)
-- Observability and monitoring foundation for API + worker:
-  - structured logging strategy,
-  - Celery task metrics and failure dashboards,
-  - processing latency/error-rate tracking.
-- Confidence calibration and extraction quality analytics.
-- Provider failover/health policy automation.
+## Next phase (Portfolio polish / v1.0 candidate)
+- Production deployment profile and environment hardening.
+- CI enhancements:
+  - migration checks,
+  - smoke API checks,
+  - optional containerized integration job.
+- Operational dashboards:
+  - processing latency,
+  - failure rates,
+  - queue depth.
+- Alerting rules for worker/API error spikes.
 
-## Short-term improvements
-- OCR/image ingestion (PNG/JPEG/TIFF).
+## Short-term
+- OCR/image ingestion.
 - Bulk export endpoint.
-- Reviewer assignment and SLA tracking.
-- Retry policy/backoff for failed processing tasks.
+- Reviewer assignment policies.
 
 ## Mid-term
-- Google Sheets export connector.
-- CRM integration connector.
-- Webhook notifications for status changes.
+- Google Sheets/CRM connectors.
+- Webhook status notifications.
 - Email intake pipeline.
 
 ## Advanced
-- Multi-tenant company/workspace boundaries.
-- Full-text + vector search over extracted content.
-- Background job monitoring UI and task observability.
-- SLO stack (metrics, tracing, structured logs).
+- Multi-tenant boundaries.
+- Full-text + vector search.
+- SLO and tracing stack.
 - Kubernetes deployment templates.
 - Rate limiting and abuse prevention.
