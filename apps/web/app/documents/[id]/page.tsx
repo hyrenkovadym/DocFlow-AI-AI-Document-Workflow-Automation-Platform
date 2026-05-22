@@ -25,11 +25,14 @@ export default function DocumentDetailPage() {
   const [extraction, setExtraction] = useState<DocumentExtractionResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<"reprocess" | "export" | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadDocument = useCallback(async (authToken: string) => {
-    setLoading(true);
-    setError(null);
+  const loadDocument = useCallback(async (authToken: string, options: { silent?: boolean } = {}) => {
+    if (!options.silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const [doc, textResponse] = await Promise.all([
         api.getDocument(documentId, authToken),
@@ -52,7 +55,9 @@ export default function DocumentDetailPage() {
       }
       setError(err instanceof Error ? err.message : "Failed to load document details.");
     } finally {
-      setLoading(false);
+      if (!options.silent) {
+        setLoading(false);
+      }
     }
   }, [documentId, router]);
 
@@ -65,6 +70,34 @@ export default function DocumentDetailPage() {
     setToken(stored);
     loadDocument(stored);
   }, [loadDocument, router]);
+
+  useEffect(() => {
+    if (!token || !documentData) {
+      return;
+    }
+    if (documentData.status !== "queued" && documentData.status !== "processing") {
+      return;
+    }
+
+    const pollInterval = window.setInterval(() => {
+      loadDocument(token, { silent: true });
+    }, 5000);
+
+    return () => window.clearInterval(pollInterval);
+  }, [documentData, loadDocument, token]);
+
+  const onRefresh = async () => {
+    if (!token) {
+      return;
+    }
+    setRefreshing(true);
+    setError(null);
+    try {
+      await loadDocument(token);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const onReprocess = async () => {
     if (!token) {
@@ -166,6 +199,9 @@ export default function DocumentDetailPage() {
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
+              <Button variant="secondary" onClick={onRefresh} disabled={busyAction !== null || refreshing}>
+                {refreshing ? "Refreshing..." : "Refresh status"}
+              </Button>
               <Button variant="secondary" onClick={onReprocess} disabled={busyAction !== null}>
                 {busyAction === "reprocess" ? "Reprocessing..." : "Reprocess"}
               </Button>
@@ -175,6 +211,10 @@ export default function DocumentDetailPage() {
                 </Button>
               ) : null}
             </div>
+
+            {documentData.status === "queued" || documentData.status === "processing" ? (
+              <p className="mt-3 text-sm text-slate-600">Processing is running in the background. Refresh status to see updates.</p>
+            ) : null}
           </Card>
 
           <div className="grid gap-4 lg:grid-cols-2">

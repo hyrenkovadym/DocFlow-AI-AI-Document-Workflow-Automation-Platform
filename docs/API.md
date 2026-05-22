@@ -1,4 +1,4 @@
-﻿# API Reference (Phase 4 Hardened MVP)
+# API Reference (Phase 5 Async MVP)
 
 Base prefix: `/api`
 
@@ -12,23 +12,30 @@ Base prefix: `/api`
   - Auth required.
   - Multipart field: `file`.
   - Supported types: `txt`, `pdf`, `docx`.
-  - Server-side file validation:
+  - Validates:
     - empty file -> `400`
     - unsupported type -> `400`
     - oversized file -> `413`
-  - Runs synchronous parse + mock extraction pipeline.
+  - `PROCESSING_MODE=async`:
+    - creates document with status `queued`,
+    - enqueues Celery task,
+    - returns quickly.
+  - `PROCESSING_MODE=sync`:
+    - runs full pipeline inline.
 - `GET /documents`
 - `GET /documents/{id}`
 - `GET /documents/{id}/text`
 - `GET /documents/{id}/extraction`
 - `POST /documents/{id}/reprocess`
-  - Allowed for owner/reviewer/admin.
-  - For `failed`, `approved`, `exported`, reprocess is allowed and returns document to `needs_review`.
+  - owner/reviewer/admin only,
+  - async mode: sets `queued` + enqueues task,
+  - sync mode: runs inline,
+  - regular user cannot reprocess others' documents.
 - `GET /documents/{id}/export.json`
 - `GET /documents/{id}/export.csv`
-  - Export allowed only for statuses: `approved`, `exported`.
-  - Other statuses -> `409`.
-  - Every export request creates export/audit records.
+  - export allowed only for `approved` or `exported`,
+  - any other status -> `409`,
+  - each export creates new export record + audit event.
 
 ## Review
 - `GET /reviews/queue` (reviewer/admin)
@@ -43,19 +50,24 @@ Base prefix: `/api`
 - `GET /health`
 - `GET /ready`
 
-## Permission rules summary
-- `user` sees only own documents.
-- `user` cannot access review queue.
-- `user` cannot approve/reject.
-- `user` cannot access audit logs.
-- `reviewer`/`admin` can access review queue and review actions.
-- `admin` can access audit logs.
+## Status lifecycle
+- Intake: `uploaded` (sync only) or `queued` (async)
+- Worker: `processing`
+- Review handoff: `needs_review`
+- Review outcome: `approved` or `rejected`
+- Exported: `exported`
+- Failure: `failed`
 
-## Export payload
+## Permission summary
+- `user`: only own documents, no review queue, no audit logs.
+- `reviewer`: review queue + review actions, can access docs under current policy.
+- `admin`: reviewer permissions + audit logs access.
+
+## Export payload (JSON)
 `GET /api/documents/{id}/export.json` returns:
-- metadata (`document_id`, `owner_id`, filename, status, type),
-- `structured_fields`,
-- review metadata (`review_status`, `reviewer_comment`),
+- document metadata (`document_id`, `owner_id`, filename, status, type),
+- confidence and `structured_fields`,
+- review fields (`review_status`, `reviewer_comment`),
 - export metadata (`exported_at`, `exported_by_id`).
 
 ## Interactive docs

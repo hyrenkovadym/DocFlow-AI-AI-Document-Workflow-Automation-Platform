@@ -13,6 +13,7 @@ from app.models.user import User
 from app.services.audit_service import log_event
 from app.services.workflow_service import process_document_pipeline_sync
 from app.utils.file_storage import ensure_directory, write_bytes
+from app.workers.tasks import process_document_task
 
 
 def _validate_upload(filename: str, content: bytes) -> str:
@@ -35,6 +36,10 @@ def _validate_upload(filename: str, content: bytes) -> str:
     return extension
 
 
+def _enqueue_document_processing(*, document_id: str, actor_id: str) -> None:
+    process_document_task.delay(document_id=document_id, actor_id=actor_id)
+
+
 def create_document_and_process(db: Session, *, owner: User, filename: str, content: bytes) -> Document:
     extension = _validate_upload(filename, content)
     settings = get_settings()
@@ -49,7 +54,7 @@ def create_document_and_process(db: Session, *, owner: User, filename: str, cont
         original_filename=filename,
         stored_filename=stored_filename,
         file_type=extension,
-        status=DocumentStatus.UPLOADED,
+        status=DocumentStatus.QUEUED if settings.is_async_processing else DocumentStatus.UPLOADED,
         metadata_json={"stored_path": str(file_path)},
     )
     db.add(document)
@@ -67,8 +72,32 @@ def create_document_and_process(db: Session, *, owner: User, filename: str, cont
             "file_type": extension,
             "stored_filename": stored_filename,
             "stored_path": str(file_path),
+            "processing_mode": settings.normalized_processing_mode,
         },
     )
+
+    if settings.is_async_processing:
+        try:
+            _enqueue_document_processing(document_id=str(document.id), actor_id=str(owner.id))
+            db.refresh(document)
+            return document
+        except Exception as exc:
+            document.status = DocumentStatus.FAILED
+            document.processing_error = f"Unable to enqueue background processing task: {exc}"
+            db.commit()
+
+            log_event(
+                db,
+                action="document_processing_failed",
+                entity_type="document",
+                entity_id=str(document.id),
+                actor_id=str(owner.id),
+                metadata={"error": document.processing_error},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Document processing queue is unavailable",
+            ) from exc
 
     process_document_pipeline_sync(db, document_id=str(document.id), actor_id=str(owner.id))
     db.expire_all()
@@ -79,7 +108,7 @@ def create_document_and_process(db: Session, *, owner: User, filename: str, cont
 
 
 def create_document_and_enqueue(db: Session, *, owner: User, filename: str, content: bytes) -> Document:
-    # Backwards-compatible alias kept intentionally while processing is synchronous.
+    # Backwards-compatible alias.
     return create_document_and_process(db, owner=owner, filename=filename, content=content)
 
 
@@ -115,8 +144,9 @@ def get_document_extraction(db: Session, *, document_id: str, user: User) -> Doc
 
 
 def reprocess_document(db: Session, *, document_id: str, user: User) -> Document:
+    settings = get_settings()
     document = get_document_for_user(db, document_id=document_id, user=user)
-    document.status = DocumentStatus.UPLOADED
+    document.status = DocumentStatus.QUEUED if settings.is_async_processing else DocumentStatus.UPLOADED
     document.processing_error = None
     db.commit()
     db.refresh(document)
@@ -127,7 +157,30 @@ def reprocess_document(db: Session, *, document_id: str, user: User) -> Document
         entity_type="document",
         entity_id=str(document.id),
         actor_id=str(user.id),
+        metadata={"processing_mode": settings.normalized_processing_mode},
     )
+
+    if settings.is_async_processing:
+        try:
+            _enqueue_document_processing(document_id=str(document.id), actor_id=str(user.id))
+            db.refresh(document)
+            return document
+        except Exception as exc:
+            document.status = DocumentStatus.FAILED
+            document.processing_error = f"Unable to enqueue background processing task: {exc}"
+            db.commit()
+            log_event(
+                db,
+                action="document_processing_failed",
+                entity_type="document",
+                entity_id=str(document.id),
+                actor_id=str(user.id),
+                metadata={"error": document.processing_error},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Document processing queue is unavailable",
+            ) from exc
 
     process_document_pipeline_sync(db, document_id=str(document.id), actor_id=str(user.id))
     db.expire_all()

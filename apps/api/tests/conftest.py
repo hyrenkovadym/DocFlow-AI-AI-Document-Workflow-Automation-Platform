@@ -29,7 +29,9 @@ def db_session(tmp_path: Path) -> Session:
 
 @pytest.fixture()
 def client(db_session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    os.environ["DATABASE_URL"] = f"sqlite+pysqlite:///{tmp_path / 'test.db'}"
     os.environ["AI_PROVIDER"] = "mock"
+    os.environ["PROCESSING_MODE"] = "sync"
     os.environ["UPLOAD_DIR"] = str(tmp_path / "uploads")
 
     from app.core.config import get_settings
