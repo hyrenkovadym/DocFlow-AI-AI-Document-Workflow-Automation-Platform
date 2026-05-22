@@ -4,6 +4,8 @@
 - Secrets are loaded from environment variables.
 - `.env` files are never committed.
 - Demo credentials in docs are local-only development accounts.
+- OpenAI API keys are optional and must be provided only via environment variables.
+- API keys are never returned by API endpoints and must never be written to logs.
 
 ## Authentication and authorization
 - Passwords are hashed with Passlib (`pbkdf2_sha256`).
@@ -35,6 +37,8 @@
 - Mock AI is default in MVP.
 - Structured output is validated through Pydantic models.
 - Human review is required before operational export decisions.
+- OpenAI-compatible provider output is treated as untrusted input until schema validation passes.
+- Invalid JSON/schema failures are handled safely per document (status -> `failed`), without crashing workers.
 
 ## Auditability
 - Important lifecycle events are logged:
@@ -51,3 +55,4 @@
 - Store uploads in object storage with malware scanning.
 - Add rate limiting, abuse controls, and security monitoring.
 - Rotate JWT/API secrets and tighten key management.
+- Use secret managers for AI provider credentials and enable least-privilege key scopes.

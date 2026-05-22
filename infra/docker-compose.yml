@@ -37,6 +37,10 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       PROCESSING_MODE: async
+      AI_PROVIDER: mock
+      OPENAI_BASE_URL: https://api.openai.com/v1
+      OPENAI_TIMEOUT_SECONDS: 30
+      OPENAI_MAX_RETRIES: 2
       UPLOAD_DIR: /app/uploads
     ports:
       - "8000:8000"
@@ -63,6 +67,10 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       PROCESSING_MODE: async
+      AI_PROVIDER: mock
+      OPENAI_BASE_URL: https://api.openai.com/v1
+      OPENAI_TIMEOUT_SECONDS: 30
+      OPENAI_MAX_RETRIES: 2
       UPLOAD_DIR: /app/uploads
     volumes:
       - ../apps/api:/app

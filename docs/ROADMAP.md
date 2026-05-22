@@ -1,9 +1,12 @@
 # Roadmap
 
-## Next phase (Phase 6)
-- Real OpenAI-compatible provider activation with stronger prompt/schema hardening.
-- Provider failover strategy (mock fallback on provider outages).
-- Confidence calibration and extraction quality metrics.
+## Next phase (Phase 7)
+- Observability and monitoring foundation for API + worker:
+  - structured logging strategy,
+  - Celery task metrics and failure dashboards,
+  - processing latency/error-rate tracking.
+- Confidence calibration and extraction quality analytics.
+- Provider failover/health policy automation.
 
 ## Short-term improvements
 - OCR/image ingestion (PNG/JPEG/TIFF).

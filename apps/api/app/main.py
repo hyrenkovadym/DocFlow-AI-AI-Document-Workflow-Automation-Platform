@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import audit_logs, auth, documents, health, reviews
+from app.api.routes import audit_logs, auth, documents, health, reviews, system
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 
@@ -27,6 +27,7 @@ app.include_router(auth.router, prefix=settings.api_v1_prefix)
 app.include_router(documents.router, prefix=settings.api_v1_prefix)
 app.include_router(reviews.router, prefix=settings.api_v1_prefix)
 app.include_router(audit_logs.router, prefix=settings.api_v1_prefix)
+app.include_router(system.router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/")

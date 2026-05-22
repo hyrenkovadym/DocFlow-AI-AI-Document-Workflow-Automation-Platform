@@ -1,4 +1,4 @@
-# Workflows (Phase 5 Async MVP)
+# Workflows (Phase 6 Async + AI Provider)
 
 ## UI flow: login -> upload -> review -> export
 1. User logs in at `/login`.
@@ -17,10 +17,12 @@
 5. Worker lifecycle:
    - set `processing` + `document_processing_started`,
    - extract text + `document_text_extracted`,
-   - run Mock AI + `ai_extraction_completed`,
+   - resolve AI provider (`mock` by default, `openai` optional),
+   - run classification/extraction + `ai_extraction_completed`,
    - create/update review task + `review_task_created`,
    - set status `needs_review`.
 6. On errors: status `failed` + `processing_error` + `document_processing_failed`.
+7. AI-specific failures also emit `ai_extraction_failed`.
 
 ## Review outcomes
 - Approve -> `approved` + `document_approved`.

@@ -1,4 +1,4 @@
-# API Reference (Phase 5 Async MVP)
+# API Reference (Phase 6 Async + AI Provider)
 
 Base prefix: `/api`
 
@@ -46,6 +46,13 @@ Base prefix: `/api`
 ## Audit
 - `GET /audit-logs` (admin only)
 
+## System
+- `GET /system/info`
+  - Safe non-secret runtime information:
+    - `processing_mode`
+    - `ai_provider`
+    - `app_env`
+
 ## Health
 - `GET /health`
 - `GET /ready`
@@ -57,6 +64,14 @@ Base prefix: `/api`
 - Review outcome: `approved` or `rejected`
 - Exported: `exported`
 - Failure: `failed`
+
+## AI provider behavior
+- `AI_PROVIDER=mock` (default): no external AI key required.
+- `AI_PROVIDER=openai`:
+  - requires `OPENAI_API_KEY`,
+  - uses OpenAI-compatible chat endpoint (`OPENAI_BASE_URL`),
+  - timeout/retry controlled by env,
+  - invalid/malformed AI responses fail the document safely (worker remains up).
 
 ## Permission summary
 - `user`: only own documents, no review queue, no audit logs.

@@ -5,10 +5,11 @@
 DocFlow AI is a production-style full-stack portfolio project that demonstrates realistic internal automation workflows: secure upload, AI-assisted extraction, human review, export, and full auditability.
 
 ## Current phase
-Phase 5 async processing is implemented:
+Phase 6 AI provider integration is implemented:
 - uploads are queued immediately,
 - processing runs in background via Redis + Celery,
 - sync processing remains available via config fallback for tests/local debugging.
+- provider selection is configurable (`mock` by default, `openai` optional).
 
 ## Tech stack
 - Backend: FastAPI, SQLAlchemy 2.x, Alembic, PostgreSQL, Redis, Celery, Pydantic
@@ -19,7 +20,9 @@ Phase 5 async processing is implemented:
 - JWT auth + RBAC (`admin`, `reviewer`, `user`)
 - File upload (`txt`, `pdf`, `docx`) with size/type validation
 - Async processing pipeline (`queued -> processing -> needs_review/failed`)
-- Mock AI provider (no external AI key required)
+- AI provider abstraction with safe fallback:
+  - `MockAIProvider` (default, test/demo/local),
+  - `OpenAICompatibleProvider` (enabled by env config).
 - Human-in-the-loop review queue (approve/reject/edit fields)
 - Audit logs for critical workflow events
 - JSON/CSV export for approved/exported documents
@@ -54,6 +57,11 @@ Phase 5 async processing is implemented:
 ## Async processing modes
 - `PROCESSING_MODE=async` (default): upload/reprocess enqueue Celery task and return quickly with `queued`.
 - `PROCESSING_MODE=sync`: upload/reprocess run full pipeline inside API request (test/debug fallback).
+
+## AI provider modes
+- `AI_PROVIDER=mock` (default): no external API key required.
+- `AI_PROVIDER=openai`: uses OpenAI-compatible chat endpoint.
+- If `AI_PROVIDER=openai` and `OPENAI_API_KEY` is missing, processing fails safely per document (worker stays healthy).
 
 ## Local setup
 ### 1. Clone and configure
@@ -106,6 +114,7 @@ Services:
 - Frontend: `http://localhost:3000`
 - Backend docs: `http://localhost:8000/docs`
 - Health: `http://localhost:8000/api/health`
+- System info: `http://localhost:8000/api/system/info`
 
 ## Environment variables
 Main runtime variables:
@@ -118,6 +127,28 @@ Main runtime variables:
 - `MAX_UPLOAD_SIZE_MB`
 - `ALLOWED_FILE_TYPES`
 - `AI_PROVIDER` (`mock` by default)
+- `OPENAI_API_KEY`
+- `OPENAI_BASE_URL` (default: `https://api.openai.com/v1`)
+- `OPENAI_MODEL` (default: `gpt-4o-mini`)
+- `OPENAI_TIMEOUT_SECONDS` (default: `30`)
+- `OPENAI_MAX_RETRIES` (default: `2`)
+
+### Run fully without AI key (recommended local/demo)
+```bash
+AI_PROVIDER=mock
+```
+
+### Enable OpenAI-compatible provider locally
+```bash
+AI_PROVIDER=openai
+OPENAI_API_KEY=your_key_here
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_TIMEOUT_SECONDS=30
+OPENAI_MAX_RETRIES=2
+```
+
+No real API keys are required for tests, and tests never call real external AI APIs.
 
 Frontend:
 - `NEXT_PUBLIC_API_BASE_URL` (default: `http://localhost:8000/api`)
@@ -163,7 +194,7 @@ npm run build
 7. Login as admin and verify events in `/audit-logs`.
 
 ## Known limitations
-- Mock AI provider only (no real provider active in default demo flow).
+- OpenAI provider path depends on external API availability and quality of model output.
 - OCR/image ingestion is not implemented.
 - Processing uses local file storage in development.
 - No bulk export endpoint yet.

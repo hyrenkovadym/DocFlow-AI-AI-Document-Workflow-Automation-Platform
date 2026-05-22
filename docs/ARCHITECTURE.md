@@ -12,6 +12,7 @@ DocFlow AI is a full-stack API-first system with asynchronous document processin
 ## Backend layering
 - `api/routes/*`: endpoint definitions and request/response boundaries.
 - `services/*`: business workflows (document, workflow, parser, AI, export, audit).
+- `services/ai/*`: provider abstraction layer (`mock` and `openai` implementations + factory).
 - `models/*`: SQLAlchemy entities and relationships.
 - `schemas/*`: Pydantic models.
 - `workers/*`: Celery app + tasks.
@@ -27,7 +28,7 @@ DocFlow AI is a full-stack API-first system with asynchronous document processin
 1. Client uploads file to `POST /api/documents/upload`.
 2. API validates file and stores metadata.
 3. API sets status `queued` and enqueues Celery task.
-4. Worker sets status `processing`, extracts text, runs Mock AI, writes extraction/review task.
+4. Worker sets status `processing`, extracts text, resolves AI provider via factory, and runs classification/extraction.
 5. Worker sets status `needs_review` (or `failed` on errors).
 6. Reviewer/admin resolves review; approved docs become exportable.
 
@@ -50,6 +51,14 @@ DocFlow AI is a full-stack API-first system with asynchronous document processin
         v
 [Celery Worker] ---> parse + mock classify + extract + review task + audits
 ```
+
+## System info endpoint
+`GET /api/system/info` exposes safe runtime flags only:
+- `processing_mode`
+- `ai_provider`
+- `app_env`
+
+No secrets are returned.
 
 ## Docker notes
 - `api` and `worker` share the same uploads volume so worker can read files stored by API.

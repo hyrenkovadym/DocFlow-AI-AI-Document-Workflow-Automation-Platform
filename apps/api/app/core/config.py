@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 API_DIR = Path(__file__).resolve().parents[2]
@@ -32,8 +32,13 @@ class Settings(BaseSettings):
     ai_provider: str = "mock"
     ai_min_confidence: float = 0.7
     openai_api_key: str | None = None
-    openai_api_base_url: str = "https://api.openai.com/v1"
+    openai_base_url: str = Field(
+        default="https://api.openai.com/v1",
+        validation_alias=AliasChoices("OPENAI_BASE_URL", "OPENAI_API_BASE_URL"),
+    )
     openai_model: str = "gpt-4o-mini"
+    openai_timeout_seconds: int = 30
+    openai_max_retries: int = 2
 
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 
@@ -60,6 +65,11 @@ class Settings(BaseSettings):
     @property
     def is_async_processing(self) -> bool:
         return self.normalized_processing_mode == "async"
+
+    @property
+    def resolved_ai_provider(self) -> str:
+        provider = self.ai_provider.strip().lower()
+        return provider if provider in {"mock", "openai"} else "mock"
 
     @property
     def resolved_celery_broker_url(self) -> str:

@@ -162,6 +162,10 @@ export default function DocumentDetailPage() {
     }
   };
 
+  const isLowConfidence = documentData?.metadata_json?.below_threshold === true;
+  const aiProviderLabel =
+    typeof documentData?.metadata_json?.ai_provider === "string" ? documentData.metadata_json.ai_provider : "unknown";
+
   return (
     <Layout title="Document Detail" description="Inspect extracted text, structured fields, and workflow actions.">
       {loading ? <LoadingState message="Loading document..." /> : null}
@@ -169,6 +173,14 @@ export default function DocumentDetailPage() {
 
       {!loading && documentData ? (
         <div className="space-y-4">
+          {isLowConfidence ? (
+            <Card className="border border-amber-200 bg-amber-50">
+              <p className="text-sm font-medium text-amber-900">
+                Low-confidence extraction detected. Please review fields carefully before approval.
+              </p>
+            </Card>
+          ) : null}
+
           <Card>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -189,6 +201,10 @@ export default function DocumentDetailPage() {
               </p>
               <p>
                 <span className="font-semibold text-slate-700">Confidence:</span> {formatConfidence(documentData.ai_confidence_score)}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-700">AI provider:</span>{" "}
+                {aiProviderLabel}
               </p>
               <p>
                 <span className="font-semibold text-slate-700">Owner ID:</span> {documentData.owner_id}

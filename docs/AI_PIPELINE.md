@@ -1,4 +1,4 @@
-# AI Pipeline (Phase 5)
+# AI Pipeline (Phase 6)
 
 ## Overview
 DocFlow AI uses a background worker pipeline. The API enqueues processing, and Celery workers execute extraction and AI classification.
@@ -31,8 +31,13 @@ If extraction fails or output is empty, document is marked `failed`.
 - `recommended_action`
 - `confidence_score`
 
+Allowed values:
+- `document_type`: `invoice`, `contract`, `request`, `report`, `unknown`
+- `priority`: `low`, `medium`, `high`
+- `confidence_score`: `0..1`
+
 ## Stage 4: Validation and persistence
-- AI output is validated by Pydantic schemas.
+- AI output is validated by Pydantic schemas before persistence.
 - Structured payload is stored in `DocumentExtraction`.
 - `document_type`, confidence, and pipeline metadata are stored on `Document`.
 
@@ -47,15 +52,31 @@ If extraction fails or output is empty, document is marked `failed`.
 - safe for local dev/CI,
 - no external network dependency.
 
-### OpenAICompatibleProvider (available, not activated by default)
+### OpenAICompatibleProvider (optional)
 - enabled by `AI_PROVIDER=openai`,
-- requires environment API key/base URL/model,
-- not used in tests.
+- requires `OPENAI_API_KEY`,
+- supports custom `OPENAI_BASE_URL`, model, timeout, and retries,
+- requests strict JSON output and validates with Pydantic,
+- malformed/invalid outputs are treated as document-level failures (worker remains healthy),
+- never used in tests (tests mock all external calls).
+
+## Prompt safety rules
+Prompts enforce:
+- JSON-only response,
+- no invented values,
+- use `null`/empty arrays when unknown,
+- output is preliminary automation assistance, not final business truth.
+
+## Failure handling
+- Missing API key in openai mode -> document status `failed` with clear `processing_error`.
+- Timeout/network/rate-limit/invalid JSON/schema failures -> document status `failed`.
+- Worker process does not crash; failures are isolated per document.
 
 ## Key audit events
 - `document_uploaded`
 - `document_processing_started`
 - `document_text_extracted`
 - `ai_extraction_completed`
+- `ai_extraction_failed`
 - `review_task_created`
 - `document_processing_failed`
